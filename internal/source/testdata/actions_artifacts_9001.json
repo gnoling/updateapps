@@ -1,0 +1,6 @@
+{"total_count": 3, "artifacts": [
+  {"name": "Mesen (Windows)", "size_in_bytes": 10, "expired": false, "archive_download_url": "https://api.example/artifacts/1/zip"},
+  {"name": "Mesen (Linux x64 - AppImage)", "size_in_bytes": 4242, "expired": false, "archive_download_url": "https://api.example/artifacts/2/zip", "digest": "sha256:AABBCC"},
+  {"name": "86Box-Qt6-NDR-Dev-UbuntuJammy-x86_64-b9001", "size_in_bytes": 77, "expired": false, "archive_download_url": "https://api.example/artifacts/3/zip"},
+  {"name": "old-thing", "size_in_bytes": 1, "expired": true, "archive_download_url": "https://api.example/artifacts/4/zip"}
+]}

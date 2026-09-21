@@ -1,0 +1,12 @@
+# tar.xz; the format is detected from content, not the file name.
+# bash: doWork gh_dir StrikerX3/Ymir ymir 'ymir-linux-x86_64-AVX2-*.tar.xz' "${APPDIR}/ymir" '' 'ymir-sdl3'
+description: Sega Saturn emulator
+category: emulators
+source:
+  type: github-release
+  repo: StrikerX3/Ymir
+asset: 'ymir-linux-x86_64-AVX2-*.tar.xz'
+install:
+  type: extract
+  dest: ${APPDIR}/ymir
+  executables: [ymir-sdl3]

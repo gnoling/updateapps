@@ -1,0 +1,25 @@
+# ~/.config/updateapps/config.yaml. Every key is optional; these are the defaults.
+
+appdir: ~/apps                     # ${APPDIR} in definitions
+appimagedir: ~/apps/appimages      # ${APPIMAGEDIR}; default: <appdir>/appimages
+jobs: 12                           # apps processed at once
+
+# Definition repositories: see docs/REPOSITORIES.md. Without this key you get the
+# public set below, opt-in. `repositories: []` means none.
+repositories:
+  - name: main
+    url: https://github.com/gnoling/updateapps-definitions
+    default: disabled              # only what enabled: names will run
+    # branch: main
+    # trusted: true                # allow shell hooks, root installs, writes outside the apps dirs
+
+enabled: []                        # by id or repo/id, e.g. [dolphin, rpcs3]
+disabled: []
+auto_pull: false                   # true: refresh repositories before every update
+
+privilege: auto                    # root for .deb installs: auto | sudo | pkexec | none
+flatpak_scope: user                # user | system
+github_token: ""                   # else $GITHUB_TOKEN, $GH_TOKEN, then `gh auth token`
+
+# definitions: ~/.config/updateapps/apps.d           # where repositories are kept
+# state: ~/.local/state/updateapps/state.json

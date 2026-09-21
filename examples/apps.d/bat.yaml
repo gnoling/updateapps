@@ -1,0 +1,14 @@
+# A .deb installed as a system package. Debs install in one apt transaction at the end of
+# the run. Without root the download is kept in ~/.cache/updateapps/pending and the
+# command to run is printed.
+name: bat
+description: A cat clone with syntax highlighting
+category: tools
+source:
+  type: github-release
+  repo: sharkdp/bat
+  channel: stable
+asset: 'bat_*_amd64.deb'
+install:
+  type: deb
+  package: bat        # optional; lets mark-current ask dpkg

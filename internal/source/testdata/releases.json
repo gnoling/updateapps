@@ -1,0 +1,61 @@
+[
+  {
+    "name": "Draft of 2.1",
+    "tag_name": "v2.1.0",
+    "draft": true,
+    "prerelease": false,
+    "published_at": null,
+    "assets": [],
+    "created_at": "2026-09-10T09:00:00Z"
+  },
+  {
+    "name": "2.0 beta",
+    "tag_name": "v2.0.0-beta1",
+    "draft": false,
+    "prerelease": true,
+    "published_at": "2026-09-01T10:00:00Z",
+    "assets": [
+      {
+        "name": "app-2.0.0-beta1-x86_64.AppImage",
+        "size": 200,
+        "updated_at": "2026-09-01T10:05:00Z",
+        "browser_download_url": "https://dl.example/beta/app-x86_64.AppImage"
+      },
+      {
+        "name": "app-2.0.0-beta1-aarch64.AppImage",
+        "size": 201,
+        "updated_at": "2026-09-01T10:05:00Z",
+        "browser_download_url": "https://dl.example/beta/app-aarch64.AppImage"
+      },
+      {
+        "name": "app-2.0.0-beta1-x86_64.AppImage.sig",
+        "size": 1,
+        "updated_at": "2026-09-01T10:05:00Z",
+        "browser_download_url": "https://dl.example/beta/app-x86_64.AppImage.sig"
+      },
+      {
+        "name": "app-2.0.0-beta1-win64.exe",
+        "size": 202,
+        "updated_at": "2026-09-01T10:05:00Z",
+        "browser_download_url": "https://dl.example/beta/app.exe"
+      }
+    ],
+    "created_at": "2026-09-01T09:00:00Z"
+  },
+  {
+    "name": "1.9",
+    "tag_name": "v1.9.0",
+    "draft": false,
+    "prerelease": false,
+    "published_at": "2026-06-01T10:00:00Z",
+    "assets": [
+      {
+        "name": "app-1.9.0-x86_64.AppImage",
+        "size": 100,
+        "updated_at": "2026-06-01T10:05:00Z",
+        "browser_download_url": "https://dl.example/1.9/app-x86_64.AppImage"
+      }
+    ],
+    "created_at": "2026-06-01T09:00:00Z"
+  }
+]

@@ -1,0 +1,9 @@
+[
+  {"tag_name": "draft", "draft": true, "assets": []},
+  {"tag_name": "v0.0.4-nightly.123", "draft": false, "assets": [
+    {"name": "Eden-Linux-v0.0.4-amd64-gcc.AppImage", "size": 5, "browser_download_url": "https://git.example/dl/123/Eden-Linux-amd64-gcc.AppImage"},
+    {"name": "Eden-Linux-v0.0.4-amd64-clang-pgo.AppImage", "size": 6, "browser_download_url": "https://git.example/dl/123/Eden-Linux-amd64-clang-pgo.AppImage"},
+    {"name": "Eden-Windows.zip", "size": 7, "browser_download_url": "https://git.example/dl/123/Eden-Windows.zip"}
+  ]},
+  {"tag_name": "v0.0.4-nightly.122", "draft": false, "assets": []}
+]

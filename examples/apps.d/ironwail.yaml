@@ -1,0 +1,13 @@
+# tar.gz with a top-level directory to strip.
+# bash: doWork gh_dir andrei-drexler/ironwail ironwail 'ironwail-*-linux-x64.tar.gz' "${APPDIR}/ironwail" --strip=1 'ironwail'
+description: Quake source port
+category: ports
+source:
+  type: github-release
+  repo: andrei-drexler/ironwail
+asset: 'ironwail-*-linux-x64.tar.gz'
+install:
+  type: extract
+  dest: ${APPDIR}/ironwail
+  strip: 1
+  executables: [ironwail]

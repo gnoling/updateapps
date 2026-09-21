@@ -1,0 +1,13 @@
+# A flatpak that flatpak updates from its remote. The version is the commit the remote
+# offers; updating means `flatpak update` for this app (or installing from the ref the
+# first time). For an app on a configured remote, skip the ref:
+#   source: {type: flatpak, remote: flathub, app: org.libretro.RetroArch}
+name: RetroArch
+description: Frontend for emulators, game engines and media players
+category: emulators
+source:
+  type: flatpak
+  ref: https://dl.flathub.org/repo/appstream/org.libretro.RetroArch.flatpakref
+install:
+  type: flatpak
+  scope: user         # or system; default: flatpak_scope in config.yaml

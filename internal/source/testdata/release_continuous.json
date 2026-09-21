@@ -1,0 +1,7 @@
+{
+  "name": "Continuous build", "tag_name": "continuous", "draft": false, "prerelease": true,
+  "published_at": "2026-09-16T05:13:21Z",
+  "assets": [
+    {"name": "Dolphin_Emulator-x86_64.AppImage", "size": 300, "updated_at": "2026-09-16T05:20:00Z", "browser_download_url": "https://dl.example/continuous/Dolphin_Emulator-x86_64.AppImage"}
+  ]
+}

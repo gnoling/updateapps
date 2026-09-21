@@ -1,0 +1,14 @@
+# Rolling tag: upstream CI recreates the 'continuous' release on every build,
+# so the tag never changes. Key on when it was published instead.
+# bash: update_dolphin
+description: GameCube/Wii emulator
+category: emulators
+source:
+  type: github-release
+  repo: qurious-pixel/dolphin
+  tag: continuous
+  version_from: published_at
+asset: Dolphin_Emulator-x86_64.AppImage
+install:
+  type: file
+  dest: ${APPIMAGEDIR}/Dolphin_Emulator-x86_64.AppImage

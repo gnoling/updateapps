@@ -1,0 +1,15 @@
+# Stable channel: skips prereleases; the version is just the tag.
+# bash: doWork gh_dir_stable Eukaryot/sonic3air sonic3air 'sonic3air_game.tar.gz' "${APPDIR}/sonic3air_game" --strip=1 'sonic3air_linux'
+description: Sonic 3 & Knuckles remaster
+category: ports
+source:
+  type: github-release
+  repo: Eukaryot/sonic3air
+  channel: stable
+  version_from: tag
+asset: sonic3air_game.tar.gz
+install:
+  type: extract
+  dest: ${APPDIR}/sonic3air_game
+  strip: 1
+  executables: [sonic3air_linux]

@@ -1,0 +1,13 @@
+# Lua escape hatch, script in its own file (script_file is relative to this YAML).
+name: Flycast
+description: Sega Dreamcast/Naomi/Atomiswave emulator
+category: emulators
+notes: |
+  The builds page is JavaScript rendering a public S3 bucket listing; flycast.lua reads the
+  listing directly.
+source:
+  type: script
+  script_file: flycast.lua
+install:
+  type: file
+  dest: ${APPIMAGEDIR}/flycast-x86_64.AppImage

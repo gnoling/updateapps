@@ -1,0 +1,20 @@
+# Post hooks: deploy a build elsewhere instead of installing it here. `install: none` with
+# `nested: true` hands the hooks the file inside the artifact zip as $FILE. A failing hook
+# fails the app, so the next run retries. Shell hooks only run from a trusted repository.
+name: Suwayomi Server (deploy)
+description: Manga server, deployed to a home server over ssh
+category: tools
+enabled: false                  # an example: point it at your own fork and host first
+source:
+  type: github-actions
+  repo: Suwayomi/Suwayomi-Server
+  workflow: CI build
+  status: any                   # the jar uploads before later jobs may fail
+  artifact: jar
+install:
+  type: none
+  nested: true
+post:
+  - ssh myserver "cp -f /srv/suwayomi/Suwayomi-Server.jar /srv/suwayomi/Suwayomi-Server.jar.old"
+  - scp "$FILE" myserver:/srv/suwayomi/Suwayomi-Server.jar
+  - ssh myserver "cd /srv/suwayomi && docker compose restart"

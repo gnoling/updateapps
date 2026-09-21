@@ -1,0 +1,12 @@
+# Zip extracted into a directory.
+# bash: doWork gh_dir drhelius/Gearboy gearboy '*ubuntu*24.04*x64.zip' "${APPDIR}/gearboy" '' 'gearboy'
+description: Game Boy/Color emulator
+category: emulators
+source:
+  type: github-release
+  repo: drhelius/Gearboy
+asset: '*ubuntu*24.04*x64.zip'
+install:
+  type: extract
+  dest: ${APPDIR}/gearboy
+  executables: [gearboy]

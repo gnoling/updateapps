@@ -1,0 +1,5 @@
+{"total_count": 3, "workflows": [
+  {"id": 101, "name": "Build Mesen", "path": ".github/workflows/build.yml"},
+  {"id": 102, "name": "Lint", "path": ".github/workflows/lint.yml"},
+  {"id": 103, "name": "build mesen", "path": ".github/workflows/build-legacy.yml"}
+]}

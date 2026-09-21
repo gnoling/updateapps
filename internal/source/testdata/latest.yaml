@@ -1,0 +1,7 @@
+latest:
+  - version: "15.0-beta1"
+    name: testing
+    date: 2026-09-01
+  - version: "14.1"
+    name: stable
+    date: 2026-04-01

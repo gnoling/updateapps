@@ -1,0 +1,8 @@
+bin/
+
+# Not part of the project: assistant instructions, and the private bash script this
+# replaced along with the brief written around it.
+CLAUDE.md
+.claude/
+legacy/
+docs/SPEC.md

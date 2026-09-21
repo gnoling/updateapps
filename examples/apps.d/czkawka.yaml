@@ -1,0 +1,12 @@
+# A bare binary (not an AppImage) into its own directory.
+# bash: doWork gh_get qarmin/czkawka czkawka_gui 'linux_czkawka_gui_x86_64' "${APPDIR}/czkawka"
+name: czkawka_gui
+description: duplicate file finder
+category: tools
+source:
+  type: github-release
+  repo: qarmin/czkawka
+asset: linux_czkawka_gui_x86_64
+install:
+  type: file
+  dest: ${APPDIR}/czkawka/czkawka_gui

@@ -1,0 +1,28 @@
+# Lua escape hatch, inline: the download link only exists in the release notes markdown.
+name: Eden
+description: Nintendo Switch emulator (continuation of the Yuzu project)
+category: emulators
+notes: |
+  Nightlies (eden-ci/nightly), not eden-emu/eden stable. The Forgejo releases have no
+  assets: builds are links in the release notes, hosted on nightly.eden-emu.dev. For another
+  build change the pattern: amd64-gcc-standard, legacy-clang-pgo, steamdeck-clang-pgo,
+  rog-ally-clang-pgo, aarch64-clang-pgo.
+source:
+  type: script
+  lua: |
+    local build = "amd64%-clang%-pgo"
+
+    local body, status = http.get("https://git.eden-emu.dev/api/v1/repos/eden-ci/nightly/releases?limit=1")
+    if status ~= 200 then error("release listing returned HTTP " .. status) end
+    local release = jq(body, ".[0]")
+    if not release then return nil, "no nightly releases listed" end
+
+    -- Markdown links: [PGO AppImage](https://nightly.eden-emu.dev/<tag>/Eden-Linux-<sha>-<build>.AppImage)
+    local url = release.body:match("%((https://[^)%s]-/Eden%-Linux%-[^)%s/]-" .. build .. "%.AppImage)%)")
+    if not url then
+      error("no " .. build:gsub("%%", "") .. " AppImage link in the notes of " .. release.tag_name)
+    end
+    return { version = release.tag_name, url = url }
+install:
+  type: file
+  dest: ${APPIMAGEDIR}/eden.AppImage

@@ -1,0 +1,11 @@
+# Simplest case: latest release, default asset glob (*AppImage).
+# bash: doWork gh_get Rosalie241/RMG RMG.AppImage
+name: RMG.AppImage
+description: N64 emulator frontend
+category: emulators
+source:
+  type: github-release
+  repo: Rosalie241/RMG
+install:
+  type: file
+  dest: ${APPIMAGEDIR}/RMG.AppImage

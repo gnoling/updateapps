@@ -1,0 +1,16 @@
+# A .flatpak bundle inside a zip from GitHub releases: nested + install type flatpak.
+name: Unleashed Recompiled
+description: PC port of the Xbox 360 Sonic Unleashed via static recompilation
+category: ports
+notes: |
+  Upstream's Linux build is a zip holding a .flatpak bundle, hence nested. It needs the
+  end-of-life org.freedesktop.Platform 23.08 runtime.
+source:
+  type: github-release
+  repo: hedge-dev/UnleashedRecomp
+  channel: stable
+asset: UnleashedRecomp-Flatpak.zip
+install:
+  type: flatpak
+  nested: true
+  package: io.github.hedge_dev.unleashedrecomp
