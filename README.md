@@ -18,7 +18,9 @@ Updated 2 out of 41 apps in 0 minute(s), 9 second(s)
 
 Linux, a single static binary, no runtime dependencies.
 
-## Install
+## Getting started
+
+**1. Install.**
 
 ```
 go install github.com/gnoling/updateapps/cmd/updateapps@latest
@@ -26,25 +28,51 @@ go install github.com/gnoling/updateapps/cmd/updateapps@latest
 
 or from a checkout, `make install` (to `~/.local/bin`; `PREFIX=` to change).
 
-## Quick start
-
-With no config file, updateapps uses the public definitions and installs nothing until
-you choose what you want:
+**2. See what's available.** No setup is needed first. The first run fetches the public
+definitions into `~/.config/updateapps/apps.d/main/` and installs nothing:
 
 ```
-updateapps list                      # fetches the definitions, shows what's available
-updateapps enable dolphin rpcs3      # or: updateapps enable --all
+updateapps list
+```
+
+**3. Choose apps.** Everything starts disabled. Name what you want by id:
+
+```
+updateapps enable dolphin rpcs3
+```
+
+If you just want to enable everything:
+
+```
+updateapps enable --all
+```
+
+Either creates `~/.config/updateapps/config.yaml` if there isn't one, and later edits leave
+the rest of the file as you wrote it. Every key it takes is in the
+[sample config](examples/config.yaml).
+
+**4. Run it.** `check` says what would happen; a bare `updateapps` does it:
+
+```
 updateapps check                     # what's new, downloading nothing
 updateapps                           # update everything enabled
 updateapps dolphin                   # only apps matching "dolphin"
 ```
 
-Apps install under `~/apps` (`appdir:` in `~/.config/updateapps/config.yaml`; see the
-[sample config](examples/config.yaml)). `enable` and `disable` edit that file for you,
-leaving the rest of it as you wrote it.
+Apps land under `~/apps`, AppImages under `~/apps/appimages`; change that with `appdir:`
+and `appimagedir:` in the config. Each definition says where its app goes, so if you
+already have some of these installed, point `appdir:` at them and run
+`updateapps mark-current` once to record them as current instead of downloading again.
 
-A GitHub token avoids the 60 requests/hour anonymous limit and is required for CI
-artifacts: `github_token:` in the config, `$GITHUB_TOKEN`, or a logged-in `gh`.
+**5. Add a GitHub token** (optional, but do it): `github_token:` in the config,
+`$GITHUB_TOKEN`, or a logged-in `gh`. Without one GitHub allows 60 requests an hour,
+and CI artifacts can't be downloaded at all.
+
+**6. Your own definitions.** Drop a YAML file in `~/.config/updateapps/apps.d/local/`
+(see [writing definitions](docs/DEFINITIONS.md)), or add other people's repositories to
+the config (see [definition repositories](docs/REPOSITORIES.md)). Definitions from a
+repository you haven't marked `trusted: true` can't run shell commands, install as root,
+or write outside your apps directories.
 
 ## Commands
 
