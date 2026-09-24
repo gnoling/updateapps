@@ -27,15 +27,24 @@ func (r *Renderer) Drain(events <-chan engine.Event) engine.Summary {
 	for ev := range events {
 		if ev.Kind == engine.RunFinished {
 			sum = *ev.Summary
-			r.summary(sum)
-		} else if ev.Kind == engine.Finalizing {
-			// Shown at once: a sudo prompt may be next, and it needs context.
-			fmt.Fprintln(r.Out, r.paint(bold, ev.Message))
-		} else if ev.Final {
-			r.block(ev)
 		}
+		r.Handle(ev)
 	}
 	return sum
+}
+
+// Handle prints what one event warrants: a block for a finished job, the
+// summary at the end, nothing for progress. The GUI's log pane uses it too.
+func (r *Renderer) Handle(ev engine.Event) {
+	switch {
+	case ev.Kind == engine.RunFinished:
+		r.summary(*ev.Summary)
+	case ev.Kind == engine.Finalizing:
+		// Shown at once: a sudo prompt may be next, and it needs context.
+		fmt.Fprintln(r.Out, r.paint(bold, ev.Message))
+	case ev.Final:
+		r.block(ev)
+	}
 }
 
 func (r *Renderer) block(ev engine.Event) {

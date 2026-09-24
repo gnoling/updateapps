@@ -12,6 +12,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"time"
 
 	"gopkg.in/yaml.v3"
 
@@ -73,6 +74,10 @@ type Config struct {
 	Privilege string `yaml:"privilege"`
 	// FlatpakScope is the default for flatpak installs: user or system.
 	FlatpakScope string `yaml:"flatpak_scope"`
+	// CheckInterval makes the GUI check for updates this often and notify:
+	// a duration like 6h, or empty/0/off for never. The CLI ignores it.
+	CheckInterval string        `yaml:"check_interval"`
+	CheckEvery    time.Duration `yaml:"-"` // CheckInterval parsed
 
 	// Set from the environment (bash compatibility) or flags, never the file.
 	Force   bool   `yaml:"-"`
@@ -185,6 +190,15 @@ func Load(path string) (*Config, error) {
 	}
 	if c.Jobs < 1 {
 		return nil, fmt.Errorf("jobs must be at least 1 (got %d)", c.Jobs)
+	}
+	switch strings.TrimSpace(c.CheckInterval) {
+	case "", "0", "off", "never":
+	default:
+		d, err := time.ParseDuration(strings.TrimSpace(c.CheckInterval))
+		if err != nil || d < time.Minute {
+			return nil, fmt.Errorf("check_interval must be a duration of at least 1m, like 6h (got %q)", c.CheckInterval)
+		}
+		c.CheckEvery = d
 	}
 	return c, nil
 }

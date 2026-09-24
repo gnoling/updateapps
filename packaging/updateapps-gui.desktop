@@ -1,0 +1,16 @@
+[Desktop Entry]
+Type=Application
+Name=updateapps
+GenericName=App Updater
+Comment=Keep AppImages, portable apps, CI builds and flatpaks up to date
+Exec=@BIN@/updateapps-gui
+Icon=updateapps
+Terminal=false
+Categories=System;PackageManager;
+Keywords=update;upgrade;AppImage;emulator;
+StartupWMClass=updateapps
+Actions=hidden;
+
+[Desktop Action hidden]
+Name=Start in the tray
+Exec=@BIN@/updateapps-gui --hidden

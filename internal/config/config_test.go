@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 func clearEnv(t *testing.T) {
@@ -138,5 +139,19 @@ func TestSampleConfigLoads(t *testing.T) {
 		sample.Privilege != defaults.Privilege || sample.FlatpakScope != defaults.FlatpakScope || sample.AutoPull != defaults.AutoPull ||
 		len(sample.Repositories) != 1 || sample.Repositories[0] != DefaultRepository {
 		t.Errorf("examples/config.yaml doesn't match the built-in defaults:\nsample   %+v\ndefaults %+v", sample, defaults)
+	}
+}
+
+func TestCheckInterval(t *testing.T) {
+	clearEnv(t)
+	c, err := Load(writeTemp(t, "check_interval: 6h\n"))
+	if err != nil || c.CheckEvery != 6*time.Hour {
+		t.Errorf("err=%v interval=%v", err, c.CheckEvery)
+	}
+	if c, err := Load(writeTemp(t, "check_interval: off\n")); err != nil || c.CheckEvery != 0 {
+		t.Errorf("off: err=%v interval=%v", err, c.CheckEvery)
+	}
+	if _, err := Load(writeTemp(t, "check_interval: 10s\n")); err == nil {
+		t.Error("under a minute should be refused")
 	}
 }

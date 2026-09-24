@@ -16,7 +16,8 @@ Obsidian (v1.13.7) — Markdown-based knowledge base / note-taking app
 Updated 2 out of 41 apps in 0 minute(s), 9 second(s)
 ```
 
-Linux, a single static binary, no runtime dependencies.
+Linux, a single static binary, no runtime dependencies. There's also a desktop app,
+`updateapps-gui`, that drives the same definitions, config and state (see [GUI](#gui)).
 
 ## Getting started
 
@@ -90,6 +91,35 @@ or write outside your apps directories.
 A filter is a case-insensitive substring of an app's id, name or repo/URL. Flags:
 `-f` reinstall, `-v`/`-vv` detail, `--dry-run`, `-j N` parallel jobs, `--config FILE`,
 `--defs DIR`. Exit status: 0 fine, 1 an app failed, 2 a config or definition problem.
+
+## GUI
+
+`updateapps-gui` is the same tool with a window: a table of every app with its status
+and version, search and category filters, check marks for acting on a few at once, and a
+details pane with each app's source, notes, last error and a copy of the log block the
+command line would print. It sits in the system tray, so it can check for updates from
+there and tell you about them with a desktop notification; closing the window hides it
+to the tray when one is available.
+
+It edits the same `config.yaml`, the same way the CLI does: enabling and disabling apps,
+adding, trusting and removing repositories, and settings such as paths, jobs and the
+GitHub token. Trusting a repository asks first. "Edit definition" on a fetched definition
+copies it to `apps.d/local/`, where it overrides the original, and opens it in your
+editor. `.deb` installs ask for root through polkit (`pkexec`).
+
+It needs cgo and OpenGL to build (on Debian and Ubuntu: `gcc libgl1-mesa-dev xorg-dev`):
+
+```
+make install-gui                       # or: go install github.com/gnoling/updateapps/cmd/updateapps-gui@latest
+updateapps-gui [--config FILE] [--defs DIR] [--hidden]
+```
+
+`make install-gui` also adds a launcher and icon to your applications menu. `--hidden`
+starts in the tray without a window: for a login autostart, copy the launcher to
+`~/.config/autostart/` and add the flag to its `Exec=` line (the launcher's "Start in the
+tray" action does the same from the menu). With
+`check_interval: 6h` in the config (or "Check for updates every" in Settings) it checks
+on that schedule and notifies you when new updates turn up.
 
 ## How it behaves
 

@@ -151,45 +151,241 @@ func (e *Editor) SetListed(key, value string, present bool) error {
 	return nil
 }
 
-var defaultLine = regexp.MustCompile(`^(\s*default:\s*)(\S+)(.*)$`)
+// scalarLine splits "key: value   # comment"; a comment needs whitespace
+// before its #, so a # inside a value survives.
+var scalarLine = regexp.MustCompile(`^(\s*[\w-]+:\s*)(\S.*?)?(\s+#.*)?$`)
 
-// SetRepoDefault sets a repository's default: to "enabled" or "disabled". If
-// the config has no repositories: key (the built-in default is in effect),
-// that repository is written out first.
-func (e *Editor) SetRepoDefault(name, value string) error {
+// encode renders a value as one YAML scalar, quoted when it must be.
+func encode(value any) (string, error) {
+	out, err := yaml.Marshal(value)
+	if err != nil {
+		return "", err
+	}
+	s := strings.TrimRight(string(out), "\n")
+	if strings.Contains(s, "\n") {
+		return "", fmt.Errorf("%q doesn't fit on one line", value)
+	}
+	return s, nil
+}
+
+// setValueLine rewrites the value on line (1-based), keeping its comment.
+func (e *Editor) setValueLine(line int, value any) error {
+	m := scalarLine.FindStringSubmatch(e.lines[line-1])
+	if m == nil {
+		return fmt.Errorf("%s:%d: can't edit this line", e.path, line)
+	}
+	s, err := encode(value)
+	if err != nil {
+		return err
+	}
+	e.replace(line, strings.TrimRight(m[1], " ")+" "+s+m[3])
+	return nil
+}
+
+// SetScalar sets a top-level scalar key (appdir, jobs, github_token...). A nil
+// value removes it. A commented-out "# key: ..." line is uncommented and
+// reused, so its explanation stays beside the value.
+func (e *Editor) SetScalar(key string, value any) error {
 	top, err := e.top()
 	if err != nil {
 		return err
 	}
-	_, repos := lookup(top, "repositories")
-	if repos == nil {
-		if name != DefaultRepository.Name {
-			return fmt.Errorf("no repository named %s", name)
-		}
-		e.appendBlock("repositories:", "  - name: "+DefaultRepository.Name, "    url: "+DefaultRepository.URL, "    default: "+value)
+	k, v := lookup(top, key)
+	switch {
+	case k != nil && !oneLine(k, v):
+		return fmt.Errorf("%s: %s isn't a one-line value", e.path, key)
+	case k != nil && value == nil:
+		e.replace(k.Line)
 		return nil
+	case k != nil:
+		return e.setValueLine(k.Line, value)
+	case value == nil:
+		return nil
+	}
+	commented := regexp.MustCompile(`^#\s*` + regexp.QuoteMeta(key) + `:(\s|$)`)
+	for i, line := range e.lines {
+		if commented.MatchString(line) {
+			e.lines[i] = strings.TrimLeft(line[1:], " ")
+			return e.setValueLine(i+1, value)
+		}
+	}
+	s, err := encode(value)
+	if err != nil {
+		return err
+	}
+	e.lines = append(e.lines, key+": "+s)
+	return nil
+}
+
+// oneLine reports whether v is a scalar written on k's line.
+func oneLine(k, v *yaml.Node) bool {
+	return v.Kind == yaml.ScalarNode && v.Line == k.Line && v.Style&(yaml.LiteralStyle|yaml.FoldedStyle) == 0
+}
+
+// SetApp turns one app on or off by name in the enabled:/disabled: lists.
+// Always listed, even where a default would do: a choice made by name has to
+// survive a later enable/disable --all.
+func (e *Editor) SetApp(id, repo string, on bool) error {
+	list, other := "enabled", "disabled"
+	if !on {
+		list, other = other, list
+	}
+	for _, entry := range []string{id, repo + "/" + id} {
+		if err := e.SetListed(other, entry, false); err != nil {
+			return err
+		}
+	}
+	return e.SetListed(list, id, true)
+}
+
+// repositories returns the repositories: sequence, writing the built-in
+// default out first if the file has no such key (it's in effect implicitly,
+// and would be lost by adding a key without it).
+func (e *Editor) repositories() (key, repos *yaml.Node, err error) {
+	top, err := e.top()
+	if err != nil {
+		return nil, nil, err
+	}
+	if key, repos = lookup(top, "repositories"); repos != nil {
+		return key, repos, nil
+	}
+	e.appendBlock("repositories:", "  - name: "+DefaultRepository.Name, "    url: "+DefaultRepository.URL, "    default: "+DefaultRepository.Default)
+	if top, err = e.top(); err != nil {
+		return nil, nil, err
+	}
+	key, repos = lookup(top, "repositories")
+	return key, repos, nil
+}
+
+func (e *Editor) repository(name string) (*yaml.Node, error) {
+	_, repos, err := e.repositories()
+	if err != nil {
+		return nil, err
 	}
 	for _, item := range repos.Content {
-		if _, n := lookup(item, "name"); n == nil || n.Value != name {
-			continue
-		}
-		if item.Style&yaml.FlowStyle != 0 {
-			return fmt.Errorf("%s: can't edit repository %s written as {...}; write it one key per line", e.path, name)
-		}
-		if k, v := lookup(item, "default"); k != nil {
-			m := defaultLine.FindStringSubmatch(e.lines[v.Line-1])
-			if m == nil {
-				return fmt.Errorf("%s:%d: can't edit this default: line", e.path, v.Line)
+		if _, n := lookup(item, "name"); n != nil && n.Value == name {
+			if item.Style&yaml.FlowStyle != 0 {
+				return nil, fmt.Errorf("%s: can't edit repository %s written as {...}; write it one key per line", e.path, name)
 			}
-			e.replace(v.Line, m[1]+value+m[3])
-			return nil
+			return item, nil
 		}
-		// After the item's last key, indented like its first.
-		lastKey := item.Content[len(item.Content)-2]
-		e.insertAfter(lastKey.Line, strings.Repeat(" ", item.Content[0].Column-1)+"default: "+value)
+	}
+	return nil, fmt.Errorf("no repository named %s", name)
+}
+
+// lastLine is the last line a node occupies.
+func lastLine(n *yaml.Node) int {
+	last := n.Line
+	for _, c := range n.Content {
+		if l := lastLine(c); l > last {
+			last = l
+		}
+	}
+	return last
+}
+
+// SetRepoField sets one key of a repository (default, trusted, branch...); a
+// nil value removes it.
+func (e *Editor) SetRepoField(name, key string, value any) error {
+	if key == "name" {
+		return errors.New("a repository can't be renamed: its folder and ids carry the name")
+	}
+	item, err := e.repository(name)
+	if err != nil {
+		return err
+	}
+	k, v := lookup(item, key)
+	switch {
+	case k != nil && !oneLine(k, v):
+		return fmt.Errorf("%s:%d: %s isn't a one-line value", e.path, k.Line, key)
+	case k != nil && value == nil:
+		e.replace(k.Line)
+		return nil
+	case k != nil:
+		return e.setValueLine(k.Line, value)
+	case value == nil:
 		return nil
 	}
-	return fmt.Errorf("no repository named %s", name)
+	s, err := encode(value)
+	if err != nil {
+		return err
+	}
+	// After the item's last line, indented like its first key.
+	e.insertAfter(lastLine(item), strings.Repeat(" ", item.Content[0].Column-1)+key+": "+s)
+	return nil
+}
+
+// SetRepoDefault sets a repository's default: to "enabled" or "disabled".
+func (e *Editor) SetRepoDefault(name, value string) error {
+	return e.SetRepoField(name, "default", value)
+}
+
+// AddRepository appends one to repositories:, after the last.
+func (e *Editor) AddRepository(r Repository) error {
+	key, repos, err := e.repositories()
+	if err != nil {
+		return err
+	}
+	for _, item := range repos.Content {
+		if _, n := lookup(item, "name"); n != nil && n.Value == r.Name {
+			return fmt.Errorf("a repository named %s already exists", r.Name)
+		}
+	}
+	block := []string{"- name: " + r.Name}
+	for _, f := range []struct {
+		key   string
+		value any
+		set   bool
+	}{
+		{"url", r.URL, r.URL != ""}, {"path", r.Path, r.Path != ""}, {"branch", r.Branch, r.Branch != ""},
+		{"default", r.Default, r.Default != ""}, {"trusted", r.Trusted, r.Trusted},
+	} {
+		if f.set {
+			s, err := encode(f.value)
+			if err != nil {
+				return err
+			}
+			block = append(block, "  "+f.key+": "+s)
+		}
+	}
+	if repos.Kind != yaml.SequenceNode || (repos.Style&yaml.FlowStyle != 0 && len(repos.Content) > 0) {
+		return fmt.Errorf("%s: can't add to repositories written as [...]; write it one entry per line", e.path)
+	}
+	indent, after := "  ", key.Line
+	if len(repos.Content) > 0 {
+		first, last := repos.Content[0], repos.Content[len(repos.Content)-1]
+		indent, after = strings.Repeat(" ", first.Column-3), lastLine(last)
+	} else {
+		// "repositories: []" becomes a block list.
+		m := flowSeq.FindStringSubmatch(e.lines[key.Line-1])
+		if m == nil {
+			return fmt.Errorf("%s:%d: can't edit this repositories: line", e.path, key.Line)
+		}
+		e.replace(key.Line, strings.TrimRight(strings.TrimRight(m[1], " ")+m[3], " "))
+	}
+	for i := range block {
+		block[i] = indent + block[i]
+	}
+	e.insertAfter(after, block...)
+	return nil
+}
+
+// RemoveRepository deletes a repository's entry. Removing the last one leaves
+// "repositories: []": a bare key would bring the built-in default back.
+func (e *Editor) RemoveRepository(name string) error {
+	item, err := e.repository(name)
+	if err != nil {
+		return err
+	}
+	key, repos, _ := e.repositories()
+	from, to := item.Line, lastLine(item)
+	e.lines = append(e.lines[:from-1], e.lines[to:]...)
+	if len(repos.Content) == 1 {
+		if m := bareKey.FindStringSubmatch(e.lines[key.Line-1]); m != nil {
+			e.replace(key.Line, strings.TrimRight(m[1]+" []"+m[2]+m[3], " "))
+		}
+	}
+	return nil
 }
 
 // Save writes the file, but only if the result still loads.

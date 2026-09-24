@@ -175,3 +175,122 @@ func sorted(s []string) []string {
 	sort.Strings(out)
 	return out
 }
+
+func TestScalars(t *testing.T) {
+	const before = `appdir: ~/apps
+jobs: 4                      # laptop
+# privilege: auto        # how .deb installs get root
+# state defaults to ~/.local/state/updateapps/state.json
+`
+	got := edit(t, before, func(e *Editor) error {
+		for _, step := range []struct {
+			key   string
+			value any
+		}{
+			{"jobs", 8}, {"privilege", "sudo"}, {"appdir", nil}, {"github_token", "x#y"}, {"auto_pull", true}, {"missing", nil},
+		} {
+			if err := e.SetScalar(step.key, step.value); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	want := `jobs: 8                      # laptop
+privilege: sudo        # how .deb installs get root
+# state defaults to ~/.local/state/updateapps/state.json
+github_token: x#y
+auto_pull: true
+`
+	if got != want {
+		t.Errorf("got %q\nwant %q", got, want)
+	}
+	c, err := Load(writeTemp(t, got))
+	if err != nil || c.Jobs != 8 || c.Privilege != "sudo" || c.GitHubToken != "x#y" || !c.AutoPull {
+		t.Errorf("err=%v %+v", err, c)
+	}
+	e, _ := OpenEditor(writeTemp(t, "notes: |\n  two\n  lines\n"))
+	if err := e.SetScalar("notes", "x"); err == nil {
+		t.Error("a multi-line value should refuse")
+	}
+}
+
+func TestSetApp(t *testing.T) {
+	got := edit(t, "enabled:\n  - a\ndisabled:\n  - main/b\n  - c\n", func(e *Editor) error {
+		if err := e.SetApp("b", "main", true); err != nil {
+			return err
+		}
+		return e.SetApp("a", "main", false)
+	})
+	if got != "enabled:\n  - b\ndisabled:\n  - c\n  - a\n" {
+		t.Errorf("got %q", got)
+	}
+}
+
+func TestRepositoryEdits(t *testing.T) {
+	after := edit(t, handWritten, func(e *Editor) error {
+		if err := e.SetRepoField("main", "trusted", true); err != nil {
+			return err
+		}
+		if err := e.SetRepoField("private", "trusted", nil); err != nil {
+			return err
+		}
+		if err := e.SetRepoField("private", "branch", "dev"); err != nil {
+			return err
+		}
+		return e.AddRepository(Repository{Name: "work", URL: "https://x/o/r", Default: "disabled"})
+	})
+	removed, added := changed(handWritten, after)
+	wantRemoved := "    trusted: true            # deploy hooks"
+	wantAdded := "    trusted: true|    branch: dev|  - name: work|    url: https://x/o/r|    default: disabled"
+	if got := strings.Join(sorted(removed), "|"); got != strings.Join(sorted(strings.Split(wantRemoved, "|")), "|") {
+		t.Errorf("removed lines:\n%q", removed)
+	}
+	if got := strings.Join(sorted(added), "|"); got != strings.Join(sorted(strings.Split(wantAdded, "|")), "|") {
+		t.Errorf("added lines:\n%q\n%s", added, after)
+	}
+	c, err := Load(writeTemp(t, after))
+	if err != nil || len(c.Repositories) != 3 || !c.Repositories[0].Trusted || c.Repositories[1].Trusted ||
+		c.Repositories[1].Branch != "dev" || c.Repositories[2].Name != "work" {
+		t.Errorf("err=%v repos=%+v\n%s", err, c.Repositories, after)
+	}
+	// The new one goes after the last entry, not after its comment block.
+	if !strings.HasSuffix(after, "  - name: work\n    url: https://x/o/r\n    default: disabled\n\nenabled: []\ndisabled:\n  - mesen                    # archived upstream\n  - snes9x\n\njobs: 4                      # laptop\n") {
+		t.Errorf("placement:\n%s", after)
+	}
+
+	// Removing entries; the last one leaves [] so the built-in default doesn't
+	// come back.
+	got := edit(t, after, func(e *Editor) error {
+		for _, n := range []string{"private", "main", "work"} {
+			if err := e.RemoveRepository(n); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	if !strings.Contains(got, "\nrepositories: []\n\nenabled: []\n") || strings.Contains(got, "name:") {
+		t.Errorf("got %q", got)
+	}
+	if c, err := Load(writeTemp(t, got)); err != nil || len(c.Repositories) != 0 {
+		t.Errorf("err=%v repos=%+v", err, c.Repositories)
+	}
+	// And adding to [] grows a block list again.
+	got = edit(t, got, func(e *Editor) error { return e.AddRepository(Repository{Name: "n", Path: "~/defs", Trusted: true}) })
+	if !strings.Contains(got, "\nrepositories:\n  - name: n\n    path: ~/defs\n    trusted: true\n\nenabled: []\n") {
+		t.Errorf("got %q", got)
+	}
+
+	// No repositories: key means the built-in default is in effect; any edit
+	// writes it out first so it isn't lost.
+	got = edit(t, "jobs: 4\n", func(e *Editor) error { return e.AddRepository(Repository{Name: "n", URL: "https://x/o/r"}) })
+	if got != "jobs: 4\n\nrepositories:\n  - name: main\n    url: "+DefaultRepository.URL+"\n    default: disabled\n  - name: n\n    url: https://x/o/r\n" {
+		t.Errorf("got %q", got)
+	}
+	e, _ := OpenEditor(writeTemp(t, handWritten))
+	if err := e.AddRepository(Repository{Name: "main", URL: "https://x"}); err == nil {
+		t.Error("duplicate name should be an error")
+	}
+	if err := e.SetRepoField("main", "name", "other"); err == nil {
+		t.Error("renaming should be an error")
+	}
+}

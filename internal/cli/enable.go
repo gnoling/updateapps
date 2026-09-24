@@ -68,14 +68,7 @@ func setEnabled(f *flags, on, all bool, args []string) error {
 				already = append(already, a.ID)
 				continue
 			}
-			for _, entry := range []string{a.ID, a.Repo + "/" + a.ID} {
-				if err := ed.SetListed(word[!on], entry, false); err != nil {
-					return &exitError{ExitConfig, err.Error()}
-				}
-			}
-			// Always listed, even where a default would do: a choice made by
-			// name has to survive a later --all.
-			if err := ed.SetListed(word[on], a.ID, true); err != nil {
+			if err := ed.SetApp(a.ID, a.Repo, on); err != nil {
 				return &exitError{ExitConfig, err.Error()}
 			}
 			changed = append(changed, a.ID)
