@@ -114,12 +114,19 @@ make install-gui                       # or: go install github.com/gnoling/updat
 updateapps-gui [--config FILE] [--defs DIR] [--hidden]
 ```
 
-`make install-gui` also adds a launcher and icon to your applications menu. `--hidden`
-starts in the tray without a window: for a login autostart, copy the launcher to
-`~/.config/autostart/` and add the flag to its `Exec=` line (the launcher's "Start in the
-tray" action does the same from the menu). With
-`check_interval: 6h` in the config (or "Check for updates every" in Settings) it checks
-on that schedule and notifies you when new updates turn up.
+`make install-gui` also adds a launcher and icon to your applications menu. Settings has
+the startup choices: "Start at login" writes `~/.config/autostart/updateapps-gui.desktop`
+(or edits the entry you already have for it), "Start in the tray" adds `--hidden` to it,
+and "Check for updates when updateapps starts" is `check_on_start: true` in the config.
+With `check_interval: 6h` (or "Check for updates every") it checks on that schedule and
+notifies you when new updates turn up.
+
+## Applications menu
+
+Opt in with `desktop_integration: true` and installs also add a launcher and icon to your
+applications menu; `updateapps desktop` does it for what's already installed. Apps you've
+made a launcher for are left to you, and only files updateapps wrote are ever replaced or
+removed. See [docs/DESKTOP.md](docs/DESKTOP.md).
 
 ## How it behaves
 

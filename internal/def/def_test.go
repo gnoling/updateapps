@@ -186,3 +186,55 @@ func TestForgejoDefaultAsset(t *testing.T) {
 		t.Fatalf("%v %+v", err, a)
 	}
 }
+
+func TestHomepage(t *testing.T) {
+	dir := t.TempDir()
+	for name, c := range map[string]struct{ body, want string }{
+		"gh":    {"source: {type: github-release, repo: o/r}", "https://github.com/o/r"},
+		"fj":    {"source: {type: forgejo, host: git.example.org, repo: o/r}", "https://git.example.org/o/r"},
+		"gl":    {"source: {type: gitlab, project: g/p}\nasset: '*.zip'", "https://gitlab.com/g/p"},
+		"fp":    {"source: {type: flatpak, app: org.x.Y, remote: flathub}\ninstall: {type: flatpak}", "https://flathub.org/apps/org.x.Y"},
+		"etag":  {"source: {type: http-etag, url: 'https://x.example/a.AppImage'}", ""},
+		"given": {"homepage: https://x.example\nsource: {type: github-release, repo: o/r}", "https://x.example"},
+	} {
+		a, err := LoadFile(write(t, dir, name+".yaml", c.body+"\n"), vars)
+		if err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		if got := a.HomepageURL(); got != c.want {
+			t.Errorf("%s: homepage = %q, want %q", name, got, c.want)
+		}
+	}
+	if _, err := LoadFile(write(t, dir, "bad.yaml", "homepage: x.example\nsource: {type: github-release, repo: o/r}\n"), vars); err == nil {
+		t.Error("a homepage without a scheme passed validation")
+	}
+}
+
+func TestDesktop(t *testing.T) {
+	dir := t.TempDir()
+	src := "source: {type: github-release, repo: o/r}\n"
+	a, err := LoadFile(write(t, dir, "a.yaml", src+"asset: '*.zip'\ninstall: {type: extract, dest: '${APPDIR}/a', executables: [bin/a]}\ndesktop: {args: '%f', icon: share/a.png, terminal: true}\n"), vars)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if a.Program() != "/apps/a/bin/a" || a.Desktop.Args != "%f" || a.Desktop.Terminal == nil || !*a.Desktop.Terminal {
+		t.Errorf("program %q, desktop %+v", a.Program(), a.Desktop)
+	}
+	b, err := LoadFile(write(t, dir, "b.yaml", src+"desktop: false\n"), vars)
+	if err != nil || !b.Desktop.Off || b.Program() != "/apps/appimages/b" {
+		t.Errorf("desktop: false: %v, %+v", err, b)
+	}
+	for name, body := range map[string]string{
+		"escapes":  src + "asset: '*.zip'\ninstall: {type: extract, dest: /x}\ndesktop: {exec: ../../bin/sh}\n",
+		"absolute": src + "asset: '*.zip'\ninstall: {type: extract, dest: /x}\ndesktop: {exec: /bin/sh}\n",
+		"file":     src + "desktop: {exec: x}\n",
+		"icon":     src + "desktop: {icon: 'http://x.example/i.png'}\n",
+		"typo":     src + "desktop: {icons: x}\n",
+		"true":     src + "desktop: true\n",
+		"deb":      src + "asset: '*.deb'\ninstall: {type: deb}\ndesktop: {args: x}\n",
+	} {
+		if _, err := LoadFile(write(t, dir, name+".yaml", body), vars); err == nil {
+			t.Errorf("%s passed validation", name)
+		}
+	}
+}

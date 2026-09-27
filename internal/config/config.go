@@ -74,10 +74,15 @@ type Config struct {
 	Privilege string `yaml:"privilege"`
 	// FlatpakScope is the default for flatpak installs: user or system.
 	FlatpakScope string `yaml:"flatpak_scope"`
+	// DesktopIntegration gives installed apps a launcher in the applications
+	// menu, except where the user has made their own.
+	DesktopIntegration bool `yaml:"desktop_integration"`
 	// CheckInterval makes the GUI check for updates this often and notify:
 	// a duration like 6h, or empty/0/off for never. The CLI ignores it.
 	CheckInterval string        `yaml:"check_interval"`
 	CheckEvery    time.Duration `yaml:"-"` // CheckInterval parsed
+	// CheckOnStart makes the GUI check everything when it starts.
+	CheckOnStart bool `yaml:"check_on_start"`
 
 	// Set from the environment (bash compatibility) or flags, never the file.
 	Force   bool   `yaml:"-"`

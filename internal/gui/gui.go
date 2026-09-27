@@ -81,7 +81,7 @@ func Main(opts Options) int {
 	u := &ui{app: a, opts: opts, announced: map[string]bool{}}
 	u.build()
 	u.setupTray()
-	go u.reload(nil)
+	go u.reload(u.startCheck)
 	if opts.Hidden && u.trayUp {
 		u.app.Run()
 	} else {

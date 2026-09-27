@@ -1,6 +1,7 @@
 package gui
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -14,7 +15,11 @@ import (
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/widget"
 
+	"github.com/gnoling/updateapps/internal/cli"
 	"github.com/gnoling/updateapps/internal/config"
+	"github.com/gnoling/updateapps/internal/def"
+	"github.com/gnoling/updateapps/internal/desktop"
+	"github.com/gnoling/updateapps/internal/fetch"
 	"github.com/gnoling/updateapps/internal/repo"
 )
 
@@ -63,6 +68,24 @@ func (u *ui) settingsDialog() {
 		every.SetText(c.CheckEvery.String())
 	}
 	every.SetPlaceHolder("e.g. 6h or 30m; empty = never")
+	menu := widget.NewCheck("Add installed apps to the applications menu", nil)
+	menu.SetChecked(c.DesktopIntegration)
+	onStart := widget.NewCheck("Check for updates when updateapps starts", nil)
+	onStart.SetChecked(c.CheckOnStart)
+	was := u.loginState()
+	tray := widget.NewCheck("Start in the tray, without the window", nil)
+	tray.SetChecked(was.Tray)
+	login := widget.NewCheck("Start at login", func(on bool) {
+		if on {
+			tray.Enable()
+		} else {
+			tray.Disable()
+		}
+	})
+	login.SetChecked(was.Enabled)
+	if !was.Enabled {
+		tray.Disable()
+	}
 
 	items := []*widget.FormItem{
 		widget.NewFormItem("Apps folder", appdir),
@@ -72,7 +95,10 @@ func (u *ui) settingsDialog() {
 		widget.NewFormItem("Flatpak scope", scope),
 		widget.NewFormItem("GitHub token", token),
 		widget.NewFormItem("", autoPull),
+		widget.NewFormItem("", menu),
 		widget.NewFormItem("Check for updates every", every),
+		widget.NewFormItem("", onStart),
+		widget.NewFormItem("", container.NewVBox(login, tray)),
 	}
 	d := dialog.NewForm("Settings", "Save", "Cancel", items, func(ok bool) {
 		if !ok {
@@ -90,6 +116,12 @@ func (u *ui) settingsDialog() {
 				return
 			}
 		}
+		if now := (desktop.Login{Enabled: login.Checked, Tray: login.Checked && tray.Checked}); now.Enabled != was.Enabled || (now.Enabled && now.Tray != was.Tray) {
+			if err := u.setLogin(now); err != nil {
+				dialog.NewError(err, u.win).Show()
+				return
+			}
+		}
 		u.editConfig(func(ed *config.Editor) error {
 			// Only what changed is written, so a default stays a default.
 			changes := []struct {
@@ -102,6 +134,8 @@ func (u *ui) settingsDialog() {
 				{"privilege", c.Privilege, privilege.Selected},
 				{"flatpak_scope", c.FlatpakScope, scope.Selected},
 				{"auto_pull", c.AutoPull, autoPull.Checked},
+				{"desktop_integration", c.DesktopIntegration, menu.Checked},
+				{"check_on_start", c.CheckOnStart, onStart.Checked},
 			}
 			for _, ch := range changes {
 				if ch.old != ch.new {
@@ -127,10 +161,76 @@ func (u *ui) settingsDialog() {
 				return ed.SetScalar("check_interval", v)
 			}
 			return nil
-		}, nil)
+		}, func() {
+			if menu.Checked && !c.DesktopIntegration {
+				u.offerLaunchers()
+			}
+		})
 	}, u.win)
 	d.Resize(fyne.NewSize(620, 0))
 	d.Show()
+}
+
+// offerLaunchers follows turning desktop integration on: updates write
+// launchers from now on, and this covers what's installed already.
+func (u *ui) offerLaunchers() {
+	apps := u.model.Runnable()
+	msg := fmt.Sprintf("Updates add a launcher from now on. Write them for the %d enabled apps too, where they're installed?\n\nApps you have a launcher for are left alone.", len(apps))
+	dialog.NewConfirm("Applications menu", msg, func(ok bool) {
+		if ok {
+			go u.writeLaunchers(apps)
+		}
+	}, u.win).Show()
+}
+
+// writeLaunchers runs off the UI goroutine.
+func (u *ui) writeLaunchers(apps []*def.App) {
+	dirs, err := cli.LauncherDirs(fetch.New(fetch.GitHubToken(u.cfg.GitHubToken)))
+	if err != nil {
+		u.logf("launchers: %v", err)
+		return
+	}
+	written, kept := 0, 0
+	for _, a := range apps {
+		res, err := dirs.Write(context.Background(), a)
+		switch {
+		case err != nil:
+			u.logf("%s: launcher not written: %v", a.ID, err)
+		case res.Outcome == desktop.Written:
+			written++
+			u.logf("%s: %s", a.ID, res)
+		case res.Outcome == desktop.Kept:
+			kept++
+		}
+	}
+	u.logf("wrote %d launchers to %s; %d apps have one of yours", written, dirs.Applications, kept)
+	fyne.Do(u.renderDetails)
+}
+
+// loginState reads the session's autostart entry for this program.
+func (u *ui) loginState() desktop.Login {
+	dir, err := desktop.AutostartDir()
+	exe, err2 := os.Executable()
+	if err != nil || err2 != nil {
+		return desktop.Login{}
+	}
+	return desktop.LoginState(dir, exe)
+}
+
+func (u *ui) setLogin(l desktop.Login) error {
+	dir, err := desktop.AutostartDir()
+	if err != nil {
+		return err
+	}
+	exe, err := os.Executable()
+	if err != nil {
+		return err
+	}
+	if err := desktop.SetLogin(dir, exe, "updateapps", "Keep AppImages, portable apps, CI builds and flatpaks up to date", "updateapps", l.Enabled, l.Tray); err != nil {
+		return err
+	}
+	u.logf("start at login: %v, in the tray: %v", l.Enabled, l.Tray)
+	return nil
 }
 
 const trustWarning = "A trusted repository's definitions may run shell commands, install system packages as root and write anywhere. Trust only what you'd let run a script as you."

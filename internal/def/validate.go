@@ -125,6 +125,27 @@ func (a *App) validate() []string {
 			add("source.remote is required with source.app (or use source.ref with a .flatpakref URL)")
 		}
 	}
+	if a.Homepage != "" && !strings.HasPrefix(a.Homepage, "https://") && !strings.HasPrefix(a.Homepage, "http://") {
+		add("homepage must be an http(s) URL")
+	}
+	d := a.Desktop
+	if (a.Install.System() || a.Install.Type == InstallNone) && d != (Desktop{}) {
+		add("desktop does not apply to install type %s", a.Install.Type)
+	}
+	if d.Exec != "" && a.Install.Type != InstallExtract {
+		add("desktop.exec only applies to install type extract; the installed file is the program")
+	}
+	if !localPath(d.Exec) {
+		add("desktop.exec must be a path inside install.dest")
+	}
+	if !strings.HasPrefix(d.Icon, "https://") && !localPath(d.Icon) {
+		add("desktop.icon must be a path inside install.dest or an https URL")
+	}
+	for name, v := range map[string]string{"exec": d.Exec, "args": d.Args, "icon": d.Icon, "categories": d.Categories, "wm_class": d.WMClass} {
+		if strings.ContainsAny(v, "\n\r") {
+			add("desktop.%s must be one line", name)
+		}
+	}
 	if !oneOf(a.Install.Scope, "", "user", "system") {
 		add("install.scope must be user or system")
 	}
@@ -186,6 +207,15 @@ func (a *App) validate() []string {
 	}
 	checkGlob(add, "install.member", in.Member)
 	return p
+}
+
+// localPath reports whether p, if set, stays inside the folder it's relative to.
+func localPath(p string) bool {
+	if p == "" {
+		return true
+	}
+	clean := path.Clean(p)
+	return !path.IsAbs(p) && !strings.Contains(p, "\\") && !strings.Contains(p, "://") && clean != ".." && !strings.HasPrefix(clean, "../")
 }
 
 // setFields returns the yaml keys of v's non-zero fields.

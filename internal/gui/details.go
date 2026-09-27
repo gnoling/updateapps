@@ -16,6 +16,7 @@ import (
 	"github.com/gnoling/updateapps/internal/cli"
 	"github.com/gnoling/updateapps/internal/config"
 	"github.com/gnoling/updateapps/internal/def"
+	"github.com/gnoling/updateapps/internal/desktop"
 	"github.com/gnoling/updateapps/internal/engine"
 	"github.com/gnoling/updateapps/internal/repo"
 )
@@ -96,11 +97,20 @@ func (u *ui) renderDetails() {
 	if dir := installDir(a); dir == "" {
 		folder.Disable()
 	}
-	objs = append(objs, container.NewGridWithColumns(2, check, update, folder, edit))
+	buttons := []fyne.CanvasObject{check, update, folder, edit}
+	if home, err := url.Parse(a.HomepageURL()); err == nil && home.Host != "" {
+		buttons = append(buttons, widget.NewButtonWithIcon("Homepage", theme.HomeIcon(), func() {
+			if err := u.app.OpenURL(home); err != nil {
+				dialog.NewError(err, u.win).Show()
+			}
+		}))
+	}
+	objs = append(objs, container.NewGridWithColumns(2, buttons...))
 
 	for _, f := range []struct{ label, value string }{
 		{"Source", sourceSummary(a)},
 		{"Installs", installSummary(a)},
+		{"Launcher", launcherSummary(a)},
 		{"Recorded", r.Version()},
 		{"Installed", when(r.Entry.InstalledAt)},
 		{"Checked", when(r.Entry.LastChecked)},
@@ -134,6 +144,20 @@ func (u *ui) renderDetails() {
 	}
 	u.details.Objects = objs
 	u.details.Refresh()
+}
+
+func launcherSummary(a *def.App) string {
+	dirs, err := desktop.DefaultDirs()
+	if err != nil || a.Program() == "" {
+		return "none"
+	}
+	switch found := dirs.Find(a); found.Outcome {
+	case desktop.Kept:
+		return found.Path + " (yours)"
+	case desktop.Written:
+		return found.Path + " (written by updateapps)"
+	}
+	return "none"
 }
 
 // setEnabled edits config.yaml like `updateapps enable/disable` and reloads.

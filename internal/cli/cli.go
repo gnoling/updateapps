@@ -115,6 +115,7 @@ doesn't re-download everything. Apps that aren't installed are left alone.`,
 			RunE: func(cmd *cobra.Command, args []string) error { return show(f, args[0]) },
 		},
 		reposCommand(f),
+		desktopCommand(f),
 	)
 	root.AddCommand(enableCommands(f)...)
 	root.AddCommand(
@@ -215,8 +216,10 @@ func run(ctx context.Context, f *flags, mode engine.Mode, filters []string) erro
 	if err != nil {
 		return &exitError{ExitConfig, err.Error()}
 	}
+	client := fetch.New(fetch.GitHubToken(cfg.GitHubToken))
 	eng := &engine.Engine{
-		Client:    fetch.New(fetch.GitHubToken(cfg.GitHubToken)),
+		Client:    client,
+		Launcher:  Launcher(cfg, client),
 		State:     st,
 		StatePath: cfg.State,
 		Vars:      cfg.Vars(),

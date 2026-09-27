@@ -44,6 +44,9 @@ type Engine struct {
 	System    install.System             // package managers and privilege
 	Resolvers map[string]source.Resolver // nil = source.NewRegistry(...)
 	TempDir   string                     // parent for the run's scratch dir; "" = os.TempDir()
+	// Launcher, if set, runs after each install that put files in place and
+	// returns a line for the log. Its failure isn't the install's.
+	Launcher func(ctx context.Context, app *def.App) (string, error)
 }
 
 // Run starts a run and returns its events, which the caller must drain; the
@@ -310,6 +313,13 @@ func (j *job) run(ctx context.Context) EventKind {
 	})
 	if err != nil {
 		return j.fail(res.Display, fmt.Errorf("installed, but recording the version failed: %w", err))
+	}
+	if j.e.Launcher != nil && app.Install.Type != def.InstallNone {
+		if line, err := j.e.Launcher(ctx, app); err != nil {
+			j.logf(0)("launcher not written: %v", err)
+		} else if line != "" {
+			j.logf(1)("%s", line)
+		}
 	}
 	if app.Notice != "" {
 		j.emit(Event{Kind: Notice, Version: res.Display, Message: app.Notice})

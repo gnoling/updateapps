@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -608,5 +609,51 @@ func TestBlockedAppIsRefusedWithAReason(t *testing.T) {
 	finals, sum := h.run(t, context.Background(), apps, Options{Jobs: 1})
 	if finals["sneaky"].Kind != Skipped || !strings.Contains(finals["sneaky"].Message, "isn't trusted") || sum.Failed != 0 || h.resolver.resolves.Load() != 0 {
 		t.Errorf("final=%+v sum=%+v resolves=%d", finals["sneaky"], sum, h.resolver.resolves.Load())
+	}
+}
+
+// The launcher step runs only after an install that's on disk and recorded,
+// and its failure isn't the app's.
+func TestLauncherRunsAfterInstall(t *testing.T) {
+	h := newHarness(t)
+	var mu sync.Mutex
+	var seen []string
+	h.eng.Launcher = func(_ context.Context, app *def.App) (string, error) {
+		mu.Lock()
+		defer mu.Unlock()
+		if _, err := os.Stat(app.Install.Dest); err != nil {
+			t.Errorf("%s: launcher ran before the install: %v", app.ID, err)
+		}
+		seen = append(seen, app.ID)
+		if app.ID == "b" {
+			return "", errors.New("read-only menu")
+		}
+		return "launcher written: x", nil
+	}
+	apps := h.apps("a", "b", "broken")
+	finals, sum := h.run(t, context.Background(), apps, Options{Jobs: 1})
+	if sum.Updated != 2 || sum.Failed != 1 || finals["b"].Kind != Installed {
+		t.Fatalf("sum=%+v", sum)
+	}
+	if strings.Join(seen, ",") != "a,b" {
+		t.Errorf("launcher ran for %v", seen)
+	}
+	logged := func(id string, level int, text string) bool {
+		for _, l := range finals[id].Log {
+			if l.Level == level && strings.Contains(l.Text, text) {
+				return true
+			}
+		}
+		return false
+	}
+	if !logged("a", 1, "launcher written") || !logged("b", 0, "read-only menu") {
+		t.Errorf("logs: a=%v b=%v", finals["a"].Log, finals["b"].Log)
+	}
+	// Nothing to install, nothing to launch.
+	seen = nil
+	h.run(t, context.Background(), apps[:2], Options{Jobs: 1})
+	h.run(t, context.Background(), apps[:2], Options{Jobs: 1, Mode: ModeCheck, Force: true})
+	if len(seen) != 0 {
+		t.Errorf("launcher ran without an install: %v", seen)
 	}
 }

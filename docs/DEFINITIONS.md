@@ -20,7 +20,9 @@ install:
 
 Other top-level keys: `enabled: false` (runs only when named), `notes:` (why a pattern is
 odd, what upstream changed), `notice:` (printed as ACTION NEEDED after an install),
-`post:` (shell hooks), `insecure: true` (skip TLS verification).
+`post:` (shell hooks), `insecure: true` (skip TLS verification), `homepage:` (the project's
+page, for the GUI's Homepage button; git-hosted sources and Flathub apps have one already).
+`desktop:` shapes the app's menu launcher, or turns it off; see [DESKTOP.md](DESKTOP.md).
 
 `${APPDIR}`, `${APPIMAGEDIR}`, `${HOME}` and `${name}` (the id) expand in `dest` and `notice`.
 

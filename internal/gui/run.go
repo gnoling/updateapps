@@ -10,6 +10,7 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/dialog"
 
+	"github.com/gnoling/updateapps/internal/cli"
 	"github.com/gnoling/updateapps/internal/config"
 	"github.com/gnoling/updateapps/internal/def"
 	"github.com/gnoling/updateapps/internal/engine"
@@ -74,8 +75,10 @@ func (u *ui) run(mode engine.Mode, apps []*def.App, from source) {
 			fyne.Do(func() { u.finishRun(mode, from, nil, nil, err) })
 			return
 		}
+		client := fetch.New(fetch.GitHubToken(cfg.GitHubToken))
 		eng := &engine.Engine{
-			Client:    fetch.New(fetch.GitHubToken(cfg.GitHubToken)),
+			Client:    client,
+			Launcher:  cli.Launcher(cfg, client),
 			State:     st,
 			StatePath: cfg.State,
 			Vars:      cfg.Vars(),
@@ -258,8 +261,22 @@ func plural(n int) string {
 	return "s"
 }
 
+// startCheck is check_on_start. With the window up it acts like Check all;
+// in the tray, like a scheduled check.
+func (u *ui) startCheck() {
+	if !u.cfg.CheckOnStart || u.cfg.DefsOverride != "" {
+		return
+	}
+	from := fromTimer
+	if u.shown {
+		from = fromWindow
+	}
+	u.run(engine.ModeCheck, u.model.Runnable(), from)
+}
+
 // armTimer schedules the next check_interval check; the first one comes a
-// minute after start, so a login autostart reports soon.
+// minute after start, so a login autostart reports soon, unless
+// check_on_start has that covered.
 func (u *ui) armTimer() {
 	if u.timer != nil {
 		u.timer.Stop()
@@ -272,7 +289,9 @@ func (u *ui) armTimer() {
 	delay := every
 	if !u.timerArmed {
 		u.timerArmed = true
-		delay = min(every, time.Minute)
+		if !u.cfg.CheckOnStart {
+			delay = min(every, time.Minute)
+		}
 	}
 	u.timer = time.AfterFunc(delay, func() { fyne.Do(u.timedCheck) })
 }
