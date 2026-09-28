@@ -65,8 +65,8 @@ type ui struct {
 	running  bool
 	cancel   func()
 	lastRun  string
-	trayUp   bool
 	shown    bool
+	tray     bool // the tray icon is set up; whether anything shows it is asked when it matters
 	trayMenu *fyne.Menu
 
 	timer      *time.Timer // the next scheduled check
@@ -82,12 +82,12 @@ func Main(opts Options) int {
 	u.build()
 	u.setupTray()
 	go u.reload(u.startCheck)
-	if opts.Hidden && u.trayUp {
-		u.app.Run()
+	if opts.Hidden {
+		go u.awaitTray()
 	} else {
 		u.showWindow()
-		u.app.Run()
 	}
+	u.app.Run()
 	return 0
 }
 
@@ -120,7 +120,8 @@ func (u *ui) build() {
 	u.win.SetIcon(icon)
 	u.win.Resize(fyne.NewSize(1150, 720))
 	u.win.SetCloseIntercept(func() {
-		if u.trayUp {
+		// Asked now, not at start: at login the panel comes up after us.
+		if u.tray && trayHostPresent() {
 			u.hideWindow()
 		} else {
 			u.quit()

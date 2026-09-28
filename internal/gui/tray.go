@@ -1,6 +1,8 @@
 package gui
 
 import (
+	"time"
+
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/driver/desktop"
 	"github.com/godbus/dbus/v5"
@@ -26,7 +28,21 @@ func (u *ui) setupTray() {
 	desk.SetSystemTrayMenu(u.trayMenu)
 	desk.SetSystemTrayIcon(icon)
 	desk.SetSystemTrayWindow(u.win)
-	u.trayUp = trayHostPresent()
+	u.tray = true
+}
+
+// trayWait is how long a hidden start waits for a tray: at login this
+// program can start before the panel.
+const trayWait = 45 * time.Second
+
+// awaitTray shows the window if no tray turns up to reach it through.
+func (u *ui) awaitTray() {
+	for deadline := time.Now().Add(trayWait); u.tray && time.Now().Before(deadline); time.Sleep(time.Second) {
+		if trayHostPresent() {
+			return
+		}
+	}
+	fyne.Do(u.showWindow)
 }
 
 // trayHostPresent asks the session bus whether anything shows status
