@@ -77,6 +77,7 @@ func NewRegistry(o Options) map[string]Resolver {
 		def.SourceYAML:          Document{YAML: true},
 		def.SourceScript:        Script{Vars: o.Vars},
 		def.SourceFlatpak:       Flatpak{UserScope: o.FlatpakUser},
+		def.SourceGit:           Git{},
 	}
 }
 

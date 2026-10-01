@@ -277,6 +277,11 @@ func (d Dirs) theirs(app *def.App) string {
 	switch dest := filepath.Clean(app.Install.Dest); {
 	case app.Install.Type == def.InstallExtract:
 		folder = dest + string(filepath.Separator)
+	case app.Install.Type == def.InstallBuild:
+		// A build into a shared directory (the AppImage dir) owns no folder.
+		if strings.EqualFold(filepath.Base(dest), app.ID) {
+			folder = dest + string(filepath.Separator)
+		}
 	case app.Install.Dest != "" && strings.EqualFold(filepath.Base(filepath.Dir(dest)), app.ID):
 		folder = filepath.Dir(dest) + string(filepath.Separator)
 	}

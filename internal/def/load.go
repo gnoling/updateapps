@@ -125,6 +125,9 @@ func (a *App) applyDefaults() {
 		if s.Type == SourceFlatpak {
 			a.Install.Type = InstallFlatpak
 		}
+		if s.Type == SourceGit {
+			a.Install.Type = InstallBuild
+		}
 	}
 	if a.Install.Dest == "" && (a.Install.Type == InstallFile || a.Install.Type == InstallExtractOne) {
 		a.Install.Dest = "${APPIMAGEDIR}/${name}"

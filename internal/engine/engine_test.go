@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -655,5 +656,138 @@ func TestLauncherRunsAfterInstall(t *testing.T) {
 	h.run(t, context.Background(), apps[:2], Options{Jobs: 1, Mode: ModeCheck, Force: true})
 	if len(seen) != 0 {
 		t.Errorf("launcher ran without an install: %v", seen)
+	}
+}
+
+// gitRepo makes a repository with one commit and returns its path and head.
+func gitRepo(t *testing.T) (string, string) {
+	t.Helper()
+	if _, err := exec.LookPath("git"); err != nil || runtime.GOOS == "windows" {
+		t.Skip("needs git and sh")
+	}
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "main.c"), []byte("v1"), 0o644)
+	var head string
+	for _, args := range [][]string{{"init", "-q", "-b", "main"}, {"add", "-A"}, {"commit", "-q", "-m", "x"}, {"rev-parse", "HEAD"}} {
+		cmd := exec.Command("git", args...)
+		cmd.Dir = dir
+		cmd.Env = append(os.Environ(), "GIT_AUTHOR_NAME=t", "GIT_AUTHOR_EMAIL=t@x", "GIT_COMMITTER_NAME=t", "GIT_COMMITTER_EMAIL=t@x")
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+		head = strings.TrimSpace(string(out))
+	}
+	return dir, head
+}
+
+// Builds run one at a time in their own lane while ordinary jobs proceed;
+// the artifacts land in dest and the version is recorded only on success.
+func TestBuildLane(t *testing.T) {
+	h := newHarness(t)
+	repo, head := gitRepo(t)
+	h.resolver.version = func(id string) string {
+		if strings.HasPrefix(id, "build") {
+			return head
+		}
+		return "v1"
+	}
+	h.eng.Build = install.Build{SourceDir: filepath.Join(h.appdir, ".src"), LogDir: filepath.Join(h.appdir, "logs")}
+	lock := filepath.Join(h.appdir, "lane.lock")
+	build := func(id string, steps ...string) *def.App {
+		return &def.App{ID: id, Name: id, Source: def.Source{Type: "fake", URL: repo, Branch: "main"},
+			Install: def.Install{Type: def.InstallBuild, Dest: filepath.Join(h.appdir, id), Steps: steps, Artifacts: []def.Artifact{{From: "out/" + id}, {From: "main.c"}}}}
+	}
+	serial := fmt.Sprintf(`test ! -e %[1]s || exit 9; touch %[1]s; sleep 0.2; mkdir -p out; echo built > out/$NAME; rm %[1]s`, lock)
+	apps := []*def.App{build("build1", serial), build("build2", serial), build("build3", "echo compiling; echo 'fatal error: boom' >&2; exit 2")}
+	apps = append(apps, h.apps("a", "b")...)
+	finals, sum := h.run(t, context.Background(), apps, Options{Jobs: 4})
+	if sum.Updated != 4 || sum.Failed != 1 {
+		t.Fatalf("sum=%+v", sum)
+	}
+	for _, id := range []string{"build1", "build2"} {
+		if finals[id].Kind != Installed {
+			t.Errorf("%s: %s %s", id, finals[id].Kind, finals[id].Message)
+		}
+		if body, _ := os.ReadFile(filepath.Join(h.appdir, id, id)); strings.TrimSpace(string(body)) != "built" {
+			t.Errorf("%s artifact = %q", id, body)
+		}
+		if _, err := os.Stat(filepath.Join(h.appdir, id, "main.c")); err != nil {
+			t.Errorf("%s: second artifact missing", id)
+		}
+		if _, err := os.Stat(filepath.Join(h.appdir, ".src", id, ".git")); err != nil {
+			t.Errorf("%s: work tree missing", id)
+		}
+	}
+	st := h.reopened(t)
+	if st.Get("build1").Version != head || st.Get("build1").Display != head || st.Get("build3").Version != "" {
+		t.Errorf("state: %+v / %+v", st.Get("build1"), st.Get("build3"))
+	}
+	failed := finals["build3"]
+	if failed.Kind != Failed || !strings.Contains(failed.Message, "boom") || !strings.Contains(failed.Message, "exit status 2") || !strings.Contains(failed.Message, "build3.log") {
+		t.Errorf("failed build: %s %q", failed.Kind, failed.Message)
+	}
+	if log, err := os.ReadFile(filepath.Join(h.appdir, "logs", "build3.log")); err != nil || !strings.Contains(string(log), "compiling") || !strings.Contains(string(log), "$ git clone") {
+		t.Errorf("build log: %v\n%s", err, log)
+	}
+	if _, err := os.Stat(filepath.Join(h.appdir, "build3")); err == nil {
+		t.Error("a failed build must leave nothing in dest")
+	}
+
+	// Up to date now; a dry run says what it would do.
+	finals, sum = h.run(t, context.Background(), apps[:2], Options{Jobs: 2})
+	if sum.UpToDate != 2 {
+		t.Errorf("rerun: %+v", sum)
+	}
+	finals, _ = h.run(t, context.Background(), apps[:1], Options{Jobs: 1, Force: true, DryRun: true})
+	if ev := finals["build1"]; ev.Kind != NewVersion || !strings.Contains(ev.Message, "would build") {
+		t.Errorf("dry run: %s %q", ev.Kind, ev.Message)
+	}
+}
+
+// Missing prerequisites stop a build before anything is cloned; the app asks
+// for action rather than failing.
+func TestBuildNeeds(t *testing.T) {
+	h := newHarness(t)
+	repo, head := gitRepo(t)
+	h.resolver.version = func(string) string { return head }
+	h.eng.Build = install.Build{SourceDir: filepath.Join(h.appdir, ".src"), LogDir: filepath.Join(h.appdir, "logs")}
+	app := &def.App{ID: "needy", Name: "needy", Source: def.Source{Type: "fake", URL: repo},
+		Install: def.Install{Type: def.InstallBuild, Dest: filepath.Join(h.appdir, "needy"), Steps: []string{"true"}, Artifacts: []def.Artifact{{From: "main.c"}},
+			Needs: def.Needs{Commands: []string{"no-such-compiler-xyz"}}}}
+	finals, sum := h.run(t, context.Background(), []*def.App{app}, Options{Jobs: 1})
+	if ev := finals["needy"]; ev.Kind != ActionNeeded || sum.Action != 1 || !strings.Contains(ev.Message, "no-such-compiler-xyz") {
+		t.Errorf("%s %q sum=%+v", ev.Kind, ev.Message, sum)
+	}
+	if _, err := os.Stat(filepath.Join(h.appdir, ".src", "needy")); err == nil {
+		t.Error("cloned despite missing prerequisites")
+	}
+	if h.reopened(t).Get("needy").Version != "" {
+		t.Error("recorded despite not building")
+	}
+}
+
+// A build that outlives install.timeout fails as its own fault; cancelling the
+// run kills it without a failure.
+func TestBuildTimeoutAndCancel(t *testing.T) {
+	h := newHarness(t)
+	repo, head := gitRepo(t)
+	h.resolver.version = func(string) string { return head }
+	h.eng.Build = install.Build{SourceDir: filepath.Join(h.appdir, ".src"), LogDir: filepath.Join(h.appdir, "logs")}
+	app := &def.App{ID: "slow", Name: "slow", Source: def.Source{Type: "fake", URL: repo},
+		Install: def.Install{Type: def.InstallBuild, Dest: filepath.Join(h.appdir, "slow"), Steps: []string{"sleep 30"}, Artifacts: []def.Artifact{{From: "main.c"}}, Timeout: "300ms"}}
+	start := time.Now()
+	finals, _ := h.run(t, context.Background(), []*def.App{app}, Options{Jobs: 1})
+	if ev := finals["slow"]; ev.Kind != Failed || !strings.Contains(ev.Message, "timed out") || time.Since(start) > 10*time.Second {
+		t.Errorf("timeout: %s %q after %s", ev.Kind, ev.Message, time.Since(start))
+	}
+
+	app.Install.Timeout = ""
+	ctx, cancel := context.WithCancel(context.Background())
+	time.AfterFunc(300*time.Millisecond, cancel)
+	start = time.Now()
+	finals, sum := h.run(t, ctx, []*def.App{app}, Options{Jobs: 1})
+	if ev := finals["slow"]; ev.Kind != Skipped || sum.Failed != 0 || time.Since(start) > 10*time.Second {
+		t.Errorf("cancel: %s %q after %s", ev.Kind, ev.Message, time.Since(start))
 	}
 }

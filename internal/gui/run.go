@@ -103,6 +103,7 @@ func (u *ui) run(mode engine.Mode, apps []*def.App, from source) {
 			State:     st,
 			StatePath: cfg.State,
 			Vars:      cfg.Vars(),
+			Build:     install.Build{SourceDir: cfg.SourceDir, LogDir: cfg.LogDir()},
 			System: install.System{
 				Privilege:   cfg.Privilege,
 				GUI:         true, // pkexec can put up a dialog; nobody's at a terminal

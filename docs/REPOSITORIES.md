@@ -81,7 +81,7 @@ added later; apps you've listed by name keep their setting.
 Whoever controls a repository controls what its definitions do on your machine. Unless
 you set `trusted: true`, its definitions may not:
 
-- run shell commands (`post:`, `source.command`),
+- run shell commands (`post:`, `source.command`, `install: build` steps),
 - install as root (`install: deb`, system-wide flatpaks),
 - install outside `appdir`/`appimagedir`.
 

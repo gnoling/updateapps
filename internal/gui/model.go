@@ -48,6 +48,8 @@ func (r *row) Status() string {
 			return "downloading " + humanBytes(ev.Bytes)
 		case engine.Extracting:
 			return "extracting"
+		case engine.Building:
+			return "building: " + firstLine(ev.Message)
 		case engine.Pending:
 			return "waiting to install"
 		case engine.PostHooks:

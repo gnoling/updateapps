@@ -10,6 +10,7 @@ import (
 	"regexp"
 	"strings"
 	"text/template"
+	"time"
 )
 
 // sourceFields lists each source type's required and optional yaml keys. "a|b"
@@ -25,6 +26,7 @@ var sourceFields = map[string]struct{ required, optional []string }{
 	SourceYAML:          {[]string{"url", "version", "download|url_jq"}, []string{"headers"}},
 	SourceScript:        {[]string{"lua|script_file"}, nil},
 	SourceFlatpak:       {[]string{"ref|app"}, []string{"remote", "branch"}},
+	SourceGit:           {[]string{"url"}, []string{"branch", "submodules"}},
 }
 
 var installFields = map[string][]string{
@@ -34,6 +36,7 @@ var installFields = map[string][]string{
 	InstallNone:       {"nested"},
 	InstallDeb:        {"nested", "package"},
 	InstallFlatpak:    {"nested", "scope", "package"},
+	InstallBuild:      {"dest", "steps", "artifacts", "timeout", "needs"},
 }
 
 func (a *App) validate() []string {
@@ -125,6 +128,46 @@ func (a *App) validate() []string {
 			add("source.remote is required with source.app (or use source.ref with a .flatpakref URL)")
 		}
 	}
+	if s.Type == SourceGit {
+		if !strings.HasPrefix(s.URL, "https://") && !strings.HasPrefix(s.URL, "http://") {
+			add("source.url must be an http(s) URL for type git")
+		}
+		if a.Install.Type != InstallBuild {
+			add("source type git needs install type build")
+		}
+	}
+	if in := a.Install; in.Type == InstallBuild {
+		if s.Type != SourceGit && ok {
+			add("install type build needs source type git")
+		}
+		if len(in.Steps) == 0 {
+			add("install.steps is required for type build")
+		}
+		if len(in.Artifacts) == 0 {
+			add("install.artifacts is required for type build")
+		}
+		for _, art := range in.Artifacts {
+			if art.From == "" || art.From == "." || !localPath(art.From) {
+				add("install.artifacts: %q must be a path inside the work tree", art.From)
+			}
+			checkGlob(add, "install.artifacts", art.From)
+			if art.To != "" && (art.To == "." || !localPath(art.To) || strings.ContainsAny(art.To, "*?[")) {
+				add("install.artifacts: to: %q must be a plain path inside dest", art.To)
+			}
+		}
+		if in.Timeout != "" {
+			if d, err := time.ParseDuration(in.Timeout); err != nil || d <= 0 {
+				add("install.timeout must be a duration like 90m or 2h")
+			}
+		}
+		for key, list := range map[string][]string{"commands": in.Needs.Commands, "pkg-config": in.Needs.PkgConfig, "apt": in.Needs.Apt} {
+			for _, name := range list {
+				if !needName.MatchString(name) {
+					add("install.needs.%s: %q isn't a package or program name", key, name)
+				}
+			}
+		}
+	}
 	if a.Homepage != "" && !strings.HasPrefix(a.Homepage, "https://") && !strings.HasPrefix(a.Homepage, "http://") {
 		add("homepage must be an http(s) URL")
 	}
@@ -132,8 +175,8 @@ func (a *App) validate() []string {
 	if (a.Install.System() || a.Install.Type == InstallNone) && d != (Desktop{}) {
 		add("desktop does not apply to install type %s", a.Install.Type)
 	}
-	if d.Exec != "" && a.Install.Type != InstallExtract {
-		add("desktop.exec only applies to install type extract; the installed file is the program")
+	if d.Exec != "" && a.Install.Type != InstallExtract && a.Install.Type != InstallBuild {
+		add("desktop.exec only applies to install types extract and build; the installed file is the program")
 	}
 	if !localPath(d.Exec) {
 		add("desktop.exec must be a path inside install.dest")
@@ -208,6 +251,10 @@ func (a *App) validate() []string {
 	checkGlob(add, "install.member", in.Member)
 	return p
 }
+
+// needName is a program, pkg-config module or package name: no spaces or
+// shell characters, since the hint quotes them in a command line.
+var needName = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9+._-]*$`)
 
 // localPath reports whether p, if set, stays inside the folder it's relative to.
 func localPath(p string) bool {

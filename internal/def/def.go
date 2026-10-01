@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"gopkg.in/yaml.v3"
 )
@@ -21,6 +22,7 @@ const (
 	SourceYAML          = "yaml"
 	SourceScript        = "script"
 	SourceFlatpak       = "flatpak"
+	SourceGit           = "git" // a branch head; pairs with install: build
 )
 
 // Install types.
@@ -31,7 +33,12 @@ const (
 	InstallNone       = "none"
 	InstallDeb        = "deb"     // system package via apt; batched, needs root
 	InstallFlatpak    = "flatpak" // bundle, flatpakref, or an app from a configured remote
+	InstallBuild      = "build"   // compile a git checkout; shell steps, so it needs trust
 )
+
+// DefaultBuildTimeout bounds a build (checkout and steps) when install.timeout
+// doesn't.
+const DefaultBuildTimeout = 2 * time.Hour
 
 // System reports whether the install goes through a package manager: no dest,
 // installed in the end-of-run batch.
@@ -74,8 +81,8 @@ type App struct {
 type Desktop struct {
 	Off bool `yaml:"-"` // desktop: false
 
-	// Exec is the program to start, relative to install.dest (extract only).
-	// Default: the first of install.executables.
+	// Exec is the program to start, relative to install.dest (extract and
+	// build only). Default: the first of install.executables or artifacts.
 	Exec string `yaml:"exec"`
 	// Args follow the program: flags, or a field code such as %f.
 	Args string `yaml:"args"`
@@ -126,6 +133,14 @@ func (a *App) Program() string {
 		if rel != "" {
 			return filepath.Join(in.Dest, filepath.FromSlash(rel))
 		}
+	case InstallBuild:
+		rel := filepath.FromSlash(a.Desktop.Exec)
+		if rel == "" && len(in.Artifacts) > 0 {
+			rel = in.Artifacts[0].Installed()
+		}
+		if rel != "" {
+			return filepath.Join(in.Dest, rel)
+		}
 	}
 	return ""
 }
@@ -159,6 +174,8 @@ func (a *App) HomepageURL() string {
 		return host + "/" + s.Project
 	case s.Type == SourceFlatpak && s.App != "" && s.Remote == "flathub":
 		return "https://flathub.org/apps/" + s.App
+	case s.Type == SourceGit:
+		return strings.TrimSuffix(strings.TrimSuffix(s.URL, "/"), ".git")
 	}
 	return ""
 }
@@ -194,7 +211,7 @@ type Source struct {
 	// gitlab
 	Project string `yaml:"project"`
 
-	// html, http-etag, json, yaml
+	// html, http-etag, json, yaml; git (the repository to clone)
 	URL          string `yaml:"url"`
 	Command      string `yaml:"command"`
 	Select       string `yaml:"select"`
@@ -217,6 +234,10 @@ type Source struct {
 	// script
 	Lua        string `yaml:"lua"`
 	ScriptFile string `yaml:"script_file"`
+
+	// git: branch (default: the remote's HEAD) and whether to check out
+	// submodules too.
+	Submodules bool `yaml:"submodules"`
 }
 
 // Asset selects a release asset: a glob string or a mapping.
@@ -263,4 +284,73 @@ type Install struct {
 	Package string `yaml:"package"`
 	// flatpak: user or system; empty means the configured default.
 	Scope string `yaml:"scope"`
+
+	// build: shell steps run in the work tree, then artifacts (paths or globs
+	// in it) are copied into dest by base name. Timeout bounds the whole
+	// build; default DefaultBuildTimeout.
+	Steps     []string   `yaml:"steps"`
+	Artifacts []Artifact `yaml:"artifacts"`
+	Timeout   string     `yaml:"timeout"`
+	// Needs lists what the steps assume is installed; checked before anything
+	// is cloned, so a missing -dev package is a clear message, not a compiler
+	// error ten minutes in.
+	Needs Needs `yaml:"needs"`
+}
+
+// Needs are a build's prerequisites: programs on PATH, pkg-config modules
+// (distro-neutral, and they prove the headers are there), and the Debian
+// package names, which are checked where dpkg exists and quoted in the hint
+// otherwise.
+type Needs struct {
+	Commands  []string `yaml:"commands"`
+	PkgConfig []string `yaml:"pkg-config"`
+	Apt       []string `yaml:"apt"`
+}
+
+func (n Needs) Empty() bool { return len(n.Commands)+len(n.PkgConfig)+len(n.Apt) == 0 }
+
+// Artifact is a build output: a path or glob in the work tree, written as a
+// string, or {from, to} to install it under another name.
+type Artifact struct {
+	From string `yaml:"from"`
+	To   string `yaml:"to"` // relative to dest; default: From's base name
+}
+
+func (a *Artifact) UnmarshalYAML(n *yaml.Node) error {
+	if n.Kind == yaml.ScalarNode {
+		a.From = n.Value
+		return nil
+	}
+	if n.Kind != yaml.MappingNode {
+		return fmt.Errorf("line %d: an artifact is a path or {from, to}", n.Line)
+	}
+	for i := 0; i < len(n.Content); i += 2 {
+		switch k := n.Content[i]; k.Value {
+		case "from", "to":
+		default:
+			return fmt.Errorf("line %d: field %s not found in artifact", k.Line, k.Value)
+		}
+	}
+	type plain Artifact
+	return n.Decode((*plain)(a))
+}
+
+// Installed is where the artifact lands, relative to dest, or "" when a glob
+// decides at build time.
+func (a Artifact) Installed() string {
+	if a.To != "" {
+		return filepath.FromSlash(a.To)
+	}
+	if strings.ContainsAny(a.From, "*?[") {
+		return ""
+	}
+	return filepath.Base(filepath.FromSlash(a.From))
+}
+
+// BuildTimeout is install.timeout parsed; validation has checked it.
+func (in Install) BuildTimeout() time.Duration {
+	if d, err := time.ParseDuration(in.Timeout); err == nil && d > 0 {
+		return d
+	}
+	return DefaultBuildTimeout
 }

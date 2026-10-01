@@ -23,6 +23,7 @@ github_token: ""                   # else $GITHUB_TOKEN, $GH_TOKEN, then `gh aut
 desktop_integration: false         # add installed apps to the applications menu (docs/DESKTOP.md)
 check_interval: 0                  # GUI only: check this often (e.g. 6h) and notify of updates
 check_on_start: false              # GUI only: check when it starts
+source_dir: ~/apps/.src            # work trees of apps built from source (install: build)
 
 # definitions: ~/.config/updateapps/apps.d           # where repositories are kept
 # state: ~/.local/state/updateapps/state.json

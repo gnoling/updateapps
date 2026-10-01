@@ -145,6 +145,20 @@ source: {type: flatpak, ref: https://dl.flathub.org/repo/appstream/org.example.A
 source: {type: flatpak, remote: flathub, app: org.example.App, branch: stable}
 ```
 
+### git
+
+A branch of a git repository, for apps with no usable binaries; pairs with
+`install: build`. The version is the branch's head commit, read from the repository's
+ref advertisement over HTTPS (one request, no git needed to check).
+
+```yaml
+source:
+  type: git
+  url: https://github.com/snes9xgit/snes9x
+  branch: master               # default: the remote's HEAD
+  submodules: true             # default false
+```
+
 ### script
 
 Lua, when nothing above fits: see [LUA.md](LUA.md).
@@ -186,7 +200,43 @@ install: {type: flatpak, scope: user}         # a .flatpak bundle or .flatpakref
 `nested: true`, on any type, unwraps an archive that merely wraps the real download
 (a tarball, `.deb` or `.flatpak` inside a zip).
 
-`deb` and system-scope `flatpak` installs, like hooks, need a trusted repository
+```yaml
+install:
+  type: build                  # compile a git checkout (source: git)
+  dest: ${APPDIR}/snes9x
+  steps:
+    - cmake -G Ninja -B build -S gtk -DCMAKE_BUILD_TYPE=Release
+    - ninja -C build
+  artifacts: [build/snes9x-gtk, data, docs, gtk/AUTHORS, LICENSE, README.md]
+  timeout: 2h                  # the default
+  needs:                       # checked before anything is cloned
+    commands: [cmake, ninja, c++]
+    pkg-config: [gtkmm-3.0, sdl2, portaudio-2.0, minizip]
+    apt: [cmake, ninja-build, g++, gettext, libgtkmm-3.0-dev, libsdl2-dev,
+          portaudio19-dev, libminizip-dev, glslang-dev]
+```
+
+The checkout lives in `source_dir/<id>` (config; default `<appdir>/.src`) and is kept
+between runs, so builds are incremental: `git fetch` and a checkout of the resolved commit,
+then the steps with `sh -c` in that directory, with `SRC`, `DEST`, `VERSION`, `NAME`,
+`APPDIR`, `APPIMAGEDIR` and `JOBS` (the CPU count) set. Local edits to tracked files are
+discarded; untracked files such as `build/` stay. `artifacts` are paths or globs in the
+checkout, copied into `dest` by their base names (`build/snes9x-gtk` becomes
+`dest/snes9x-gtk`; a directory is copied whole), staged so a failed build changes nothing.
+`{from: 'build/Snes9x*.AppImage', to: Snes9x.AppImage}` installs one under another name,
+so a build can drop an AppImage into `dest: ${APPIMAGEDIR}`.
+Updating needs the `git` command and whatever the steps run. Builds run one at a time,
+while other apps carry on. Everything the tools print goes to
+`~/.local/state/updateapps/logs/<id>.log`; the run shows the last lines on failure.
+Steps are shell, so a build needs a trusted repository.
+
+`needs` says what the steps assume is installed. `commands` must be on PATH, `pkg-config`
+modules must exist (distro-neutral, and they prove the headers are there), and `apt` names
+the Debian/Ubuntu packages, checked with dpkg where it exists and quoted in the hint. When
+something is missing the app ends as **action needed** with the `apt-get install` line
+to run; nothing is cloned, built or recorded.
+
+`deb` and system-scope `flatpak` installs, like hooks and build steps, need a trusted repository
 ([REPOSITORIES.md](REPOSITORIES.md#trust)).
 
 ## Post hooks

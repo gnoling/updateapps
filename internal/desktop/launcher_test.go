@@ -127,6 +127,22 @@ func TestTheirLaunchersAreLeftAlone(t *testing.T) {
 	}
 	os.Remove(theirs)
 
+	// A build into its own folder: a wrapper there is theirs. A build into the
+	// shared AppImage dir owns no folder, so only its program counts.
+	built := &def.App{ID: "snes9x", Install: def.Install{Type: def.InstallBuild, Dest: filepath.Join(app.Install.Dest, "snes9x"), Artifacts: []def.Artifact{{From: "build/snes9x-gtk"}}}}
+	put(t, filepath.Join(built.Install.Dest, "snes9x-gtk"), "x", 0o755)
+	put(t, theirs, "[Desktop Entry]\nExec="+Quote(built.Install.Dest+"/run.sh")+"\n", 0o644)
+	if res, err := d.Write(context.Background(), built); err != nil || res.Outcome != Kept {
+		t.Fatalf("build wrapper: %+v, %v", res, err)
+	}
+	shared := &def.App{ID: "snes9x-appimage", Install: def.Install{Type: def.InstallBuild, Dest: filepath.Dir(built.Install.Dest), Artifacts: []def.Artifact{{From: "build/Snes9x.AppImage"}}}}
+	put(t, filepath.Join(shared.Install.Dest, "Snes9x.AppImage"), "x", 0o755)
+	if res, err := d.Write(context.Background(), shared); err != nil || res.Outcome != Written {
+		t.Fatalf("shared dir: %+v, %v", res, err)
+	}
+	os.Remove(theirs)
+	d.Remove(shared.ID)
+
 	// One of ours they took over by removing the marker.
 	put(t, d.Path(app.ID), "[Desktop Entry]\nName=edited\nExec=/elsewhere\n", 0o644)
 	if res, err := d.Write(context.Background(), app); err != nil || res.Outcome != Kept {

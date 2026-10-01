@@ -1,0 +1,21 @@
+# Built from source: upstream has no Linux binaries since its CI shut down. Updating needs
+# git and what needs: lists; the first clone is about 600M with submodules.
+name: Snes9x
+description: Super Nintendo Entertainment System emulator
+category: emulators
+source:
+  type: git
+  url: https://github.com/snes9xgit/snes9x
+  submodules: true
+install:
+  type: build
+  dest: ${APPDIR}/snes9x
+  steps:
+    - cmake -G Ninja -B build -S gtk -DCMAKE_BUILD_TYPE=Release
+    - ninja -C build
+  artifacts: [build/snes9x-gtk, data, docs, gtk/AUTHORS, LICENSE, README.md]
+  needs:
+    commands: [cmake, ninja, c++]
+    pkg-config: [gtkmm-3.0, sdl2, portaudio-2.0, minizip]
+    apt: [cmake, ninja-build, g++, gettext, libgtkmm-3.0-dev, libsdl2-dev,
+          portaudio19-dev, libminizip-dev, glslang-dev]

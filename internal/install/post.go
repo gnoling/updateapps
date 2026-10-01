@@ -28,7 +28,7 @@ type HookEnv struct {
 func RunPost(ctx context.Context, app *def.App, env HookEnv, stage string, logf func(string, ...any)) error {
 	dir := stage
 	switch app.Install.Type {
-	case def.InstallExtract:
+	case def.InstallExtract, def.InstallBuild:
 		dir = app.Install.Dest
 	case def.InstallFile, def.InstallExtractOne:
 		dir = filepath.Dir(app.Install.Dest)

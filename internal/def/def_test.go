@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 var vars = Vars{AppDir: "/apps", AppImageDir: "/apps/appimages", Home: "/home/u"}
@@ -99,6 +100,16 @@ func TestValidationErrors(t *testing.T) {
 		"bad flatpak scope":            {"source: {type: flatpak, ref: 'https://x/a.flatpakref'}\ninstall: {type: flatpak, scope: root}\n", "install.scope"},
 		"dest on a deb":                {"source: {type: github-release, repo: o/r}\ninstall: {type: deb, dest: /x}\n", "install.dest does not apply"},
 		"none without post":            {"source: {type: http-etag, url: 'http://x'}\ninstall: {type: none}\n", "does nothing without post"},
+		"git needs build":              {"source: {type: git, url: 'https://x/r'}\ninstall: {type: extract, dest: '${APPDIR}/x'}\n", "needs install type build"},
+		"build needs git":              {"source: {type: github-release, repo: o/r}\ninstall: {type: build, dest: '${APPDIR}/x', steps: [make], artifacts: [x]}\n", "needs source type git"},
+		"git needs https":              {"source: {type: git, url: 'git@x:r.git'}\ninstall: {dest: '${APPDIR}/x', steps: [make], artifacts: [x]}\n", "source.url must be an http(s) URL"},
+		"build needs steps":            {"source: {type: git, url: 'https://x/r'}\ninstall: {dest: '${APPDIR}/x', artifacts: [x]}\n", "install.steps is required"},
+		"build needs artifacts":        {"source: {type: git, url: 'https://x/r'}\ninstall: {dest: '${APPDIR}/x', steps: [make]}\n", "install.artifacts is required"},
+		"artifact escapes":             {"source: {type: git, url: 'https://x/r'}\ninstall: {dest: '${APPDIR}/x', steps: [make], artifacts: ['../x']}\n", "inside the work tree"},
+		"artifact to glob":             {"source: {type: git, url: 'https://x/r'}\ninstall: {dest: '${APPDIR}/x', steps: [make], artifacts: [{from: x, to: '*.y'}]}\n", "plain path inside dest"},
+		"artifact typo":                {"source: {type: git, url: 'https://x/r'}\ninstall: {dest: '${APPDIR}/x', steps: [make], artifacts: [{form: x}]}\n", "form"},
+		"bad need name":                {"source: {type: git, url: 'https://x/r'}\ninstall: {dest: '${APPDIR}/x', steps: [make], artifacts: [x], needs: {apt: ['lib; rm -rf /']}}\n", "install.needs.apt"},
+		"bad build timeout":            {"source: {type: git, url: 'https://x/r'}\ninstall: {dest: '${APPDIR}/x', steps: [make], artifacts: [x], timeout: soon}\n", "install.timeout"},
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -125,6 +136,7 @@ func TestFutureTypesValidate(t *testing.T) {
 		"bundle":  "source: {type: github-release, repo: o/r}\nasset: '*.flatpak'\ninstall: {type: flatpak, scope: system}\n",
 		"fpref":   "source: {type: flatpak, ref: 'https://flatpak.example/dev.flatpakref'}\n",
 		"fpapp":   "source: {type: flatpak, remote: flathub, app: org.libretro.RetroArch, branch: stable}\n",
+		"build":   "source: {type: git, url: 'https://github.com/o/r', branch: dev, submodules: true}\ninstall: {dest: '${APPDIR}/x', steps: ['cmake -B build', 'ninja -C build'], artifacts: ['build/x', 'data', '*.md'], timeout: 90m, needs: {commands: [cmake, c++], pkg-config: [gtkmm-3.0], apt: [libgtkmm-3.0-dev]}}\ndesktop: {exec: x}\n",
 	}
 	for name, body := range cases {
 		if _, err := LoadFile(write(t, t.TempDir(), name+".yaml", body), vars); err != nil {
@@ -196,6 +208,7 @@ func TestHomepage(t *testing.T) {
 		"fp":    {"source: {type: flatpak, app: org.x.Y, remote: flathub}\ninstall: {type: flatpak}", "https://flathub.org/apps/org.x.Y"},
 		"etag":  {"source: {type: http-etag, url: 'https://x.example/a.AppImage'}", ""},
 		"given": {"homepage: https://x.example\nsource: {type: github-release, repo: o/r}", "https://x.example"},
+		"git":   {"source: {type: git, url: 'https://codeberg.org/o/r.git'}\ninstall: {dest: '${APPDIR}/r', steps: [make], artifacts: [r]}", "https://codeberg.org/o/r"},
 	} {
 		a, err := LoadFile(write(t, dir, name+".yaml", c.body+"\n"), vars)
 		if err != nil {
@@ -236,5 +249,32 @@ func TestDesktop(t *testing.T) {
 		if _, err := LoadFile(write(t, dir, name+".yaml", body), vars); err == nil {
 			t.Errorf("%s passed validation", name)
 		}
+	}
+}
+
+// A build installs its artifacts by base name; the first one is the program
+// unless desktop.exec says otherwise. The install type is implied by the source.
+func TestBuildDefaults(t *testing.T) {
+	dir := t.TempDir()
+	a, err := LoadFile(write(t, dir, "a.yaml", "source: {type: git, url: 'https://x/r'}\ninstall: {dest: '${APPDIR}/a', steps: [make], artifacts: ['build/bin/a-gtk', docs]}\n"), vars)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if a.Install.Type != InstallBuild || a.Program() != "/apps/a/a-gtk" || a.Install.BuildTimeout() != DefaultBuildTimeout {
+		t.Errorf("install %+v, program %q, timeout %s", a.Install, a.Program(), a.Install.BuildTimeout())
+	}
+	b, err := LoadFile(write(t, dir, "b.yaml", "source: {type: git, url: 'https://x/r'}\ninstall: {dest: '${APPDIR}/b', steps: [make], artifacts: ['build/*'], timeout: 30m}\ndesktop: {exec: bin/b}\n"), vars)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if b.Program() != "/apps/b/bin/b" || b.Install.BuildTimeout() != 30*time.Minute {
+		t.Errorf("program %q, timeout %s", b.Program(), b.Install.BuildTimeout())
+	}
+	c, err := LoadFile(write(t, dir, "c.yaml", "source: {type: git, url: 'https://x/r'}\ninstall: {dest: '${APPIMAGEDIR}', steps: [make], artifacts: [{from: 'build/C-*.AppImage', to: C.AppImage}, LICENSE]}\n"), vars)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.Program() != "/apps/appimages/C.AppImage" || c.Install.Artifacts[1].From != "LICENSE" {
+		t.Errorf("program %q, artifacts %+v", c.Program(), c.Install.Artifacts)
 	}
 }

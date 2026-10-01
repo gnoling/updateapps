@@ -197,6 +197,9 @@ func needsTrust(a *def.App, vars def.Vars, repo string) string {
 	if a.Source.Command != "" {
 		why = append(why, "runs a shell command (source.command)")
 	}
+	if a.Install.Type == def.InstallBuild {
+		why = append(why, "runs shell commands (build steps)")
+	}
 	if a.Install.Type == def.InstallDeb {
 		why = append(why, "installs a system package as root")
 	}
@@ -216,6 +219,7 @@ func within(root, p string) bool {
 	if root == "" {
 		return false
 	}
+	// The directory itself counts: a build may install straight into it.
 	rel, err := filepath.Rel(filepath.Clean(root), filepath.Clean(p))
-	return err == nil && rel != "." && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
+	return err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
 }

@@ -141,6 +141,8 @@ removed. See [docs/DESKTOP.md](docs/DESKTOP.md).
 - A version is recorded only after the install, and any hooks, succeed. Failures retry next run.
 - `.deb`s install in one `apt` transaction at the end of a run. Without root the download
   is kept and the command to run is printed.
+- Apps built from source (`install: build`) keep their checkout between runs and compile
+  one at a time; full build output goes to `~/.local/state/updateapps/logs/<id>.log`.
 - Definitions from a repository you haven't marked `trusted` can't run shell commands,
   install as root, or write outside your apps directories.
 

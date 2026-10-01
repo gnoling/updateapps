@@ -14,6 +14,8 @@ const (
 	NewVersion
 	Downloading
 	Extracting
+	// Building: Message says what the build lane is doing for the app.
+	Building
 	// Pending: downloaded, waiting for the end-of-run system-package batch.
 	Pending
 	PostHooks
@@ -32,7 +34,7 @@ const (
 )
 
 var kindNames = [...]string{"RunStarted", "Queued", "Checking", "UpToDate", "NewVersion", "Downloading",
-	"Extracting", "Pending", "PostHooks", "Installed", "Marked", "Notice", "Failed", "Skipped",
+	"Extracting", "Building", "Pending", "PostHooks", "Installed", "Marked", "Notice", "Failed", "Skipped",
 	"ActionNeeded", "Finalizing", "RunFinished"}
 
 func (k EventKind) String() string { return kindNames[k] }

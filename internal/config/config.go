@@ -83,6 +83,9 @@ type Config struct {
 	CheckEvery    time.Duration `yaml:"-"` // CheckInterval parsed
 	// CheckOnStart makes the GUI check everything when it starts.
 	CheckOnStart bool `yaml:"check_on_start"`
+	// SourceDir holds the work trees of apps built from source, one per id.
+	// Default: .src under appdir.
+	SourceDir string `yaml:"source_dir"`
 
 	// Set from the environment (bash compatibility) or flags, never the file.
 	Force   bool   `yaml:"-"`
@@ -166,8 +169,11 @@ func Load(path string) (*Config, error) {
 	if c.AppImageDir == "" {
 		c.AppImageDir = filepath.Join(c.AppDir, "appimages")
 	}
-	for _, p := range []*string{&c.AppDir, &c.AppImageDir, &c.Definitions, &c.State} {
+	for _, p := range []*string{&c.AppDir, &c.AppImageDir, &c.Definitions, &c.State, &c.SourceDir} {
 		*p = expandHome(*p, home)
+	}
+	if c.SourceDir == "" {
+		c.SourceDir = filepath.Join(c.AppDir, ".src")
 	}
 	seen := map[string]bool{}
 	for i := range c.Repositories {
@@ -216,6 +222,9 @@ func PendingDir() string {
 	}
 	return filepath.Join(dir, "updateapps", "pending")
 }
+
+// LogDir is where build logs go, beside the state file.
+func (c *Config) LogDir() string { return filepath.Join(filepath.Dir(c.State), "logs") }
 
 // Vars are the values definitions can reference.
 func (c *Config) Vars() def.Vars {

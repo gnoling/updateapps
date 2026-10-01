@@ -224,6 +224,7 @@ func run(ctx context.Context, f *flags, mode engine.Mode, filters []string) erro
 		State:     st,
 		StatePath: cfg.State,
 		Vars:      cfg.Vars(),
+		Build:     install.Build{SourceDir: cfg.SourceDir, LogDir: cfg.LogDir()},
 		System: install.System{
 			Privilege:   cfg.Privilege,
 			Interactive: isTerminal(os.Stdin) && isTerminal(os.Stderr),

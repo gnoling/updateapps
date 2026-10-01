@@ -105,6 +105,7 @@ func TestUntrustedRepositoryCannotRunCode(t *testing.T) {
 		"userflat.yaml": "source: {type: flatpak, remote: flathub, app: org.x.Y}\n",
 		"bashrc.yaml":   plain + "install: {type: file, dest: '${HOME}/.bashrc'}\n",
 		"escape.yaml":   plain + "install: {type: extract, dest: '${APPDIR}/../.config/autostart'}\n",
+		"build.yaml":    "source: {type: git, url: 'https://x/r'}\ninstall: {dest: '${APPDIR}/r', steps: [make], artifacts: [r]}\n",
 	}
 	dir := writeRepo(t, t.TempDir(), files)
 	cfg := cfgWith(t, config.Repository{Name: "stranger", Path: dir})
@@ -114,7 +115,7 @@ func TestUntrustedRepositoryCannotRunCode(t *testing.T) {
 	}
 	for id, blocked := range map[string]bool{
 		"fine": false, "lua": false, "userflat": false,
-		"hooks": true, "command": true, "root": true, "sysflat": true, "bashrc": true, "escape": true,
+		"hooks": true, "command": true, "root": true, "sysflat": true, "bashrc": true, "escape": true, "build": true,
 	} {
 		a := find(set, id)
 		if (a.Blocked != "") != blocked {

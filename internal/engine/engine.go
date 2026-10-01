@@ -41,6 +41,7 @@ type Engine struct {
 	State     *state.Store
 	StatePath string                     // the run lock lives beside it
 	Vars      def.Vars                   // APPDIR etc. for post hooks
+	Build     install.Build              // work trees and logs for install: build
 	System    install.System             // package managers and privilege
 	Resolvers map[string]source.Resolver // nil = source.NewRegistry(...)
 	TempDir   string                     // parent for the run's scratch dir; "" = os.TempDir()
@@ -111,6 +112,18 @@ func (e *Engine) Run(ctx context.Context, apps []*def.App, opts Options) (<-chan
 			}
 		}
 		batch := &batch{}
+		// Builds leave the pool for a lane of their own: one at a time, so
+		// compilers don't fight, while downloads carry on. Buffered so no
+		// worker waits on it.
+		lane := make(chan *build, len(apps))
+		var laneWG sync.WaitGroup
+		laneWG.Add(1)
+		go func() {
+			defer laneWG.Done()
+			for b := range lane {
+				count(b.job.build(ctx, b.res))
+			}
+		}()
 		var wg sync.WaitGroup
 		queue := make(chan *def.App)
 		for i := 0; i < opts.Jobs; i++ {
@@ -118,7 +131,7 @@ func (e *Engine) Run(ctx context.Context, apps []*def.App, opts Options) (<-chan
 			go func() {
 				defer wg.Done()
 				for app := range queue {
-					j := &job{e: e, app: app, opts: opts, tmp: tmp, events: events, batch: batch}
+					j := &job{e: e, app: app, opts: opts, tmp: tmp, events: events, batch: batch, lane: lane}
 					count(j.run(ctx))
 				}
 			}()
@@ -133,6 +146,8 @@ func (e *Engine) Run(ctx context.Context, apps []*def.App, opts Options) (<-chan
 		}
 		close(queue)
 		wg.Wait()
+		close(lane)
+		laneWG.Wait()
 		// System packages install here: one transaction per kind, nothing else
 		// running.
 		batch.finalize(ctx, e, events, count)
@@ -152,6 +167,7 @@ type job struct {
 	tmp    string
 	events chan<- Event
 	batch  *batch
+	lane   chan<- *build
 	log    []LogLine
 	prev   string
 }
@@ -260,12 +276,20 @@ func (j *job) run(ctx context.Context) EventKind {
 		return j.markCurrent(res)
 	}
 	if j.opts.DryRun {
-		return j.finish(Event{Kind: NewVersion, Version: res.Display,
-			Message: fmt.Sprintf("dry run: would download %s -> %s", res.URL, app.Install.Dest)})
+		msg := fmt.Sprintf("dry run: would download %s -> %s", res.URL, app.Install.Dest)
+		if app.Install.Type == def.InstallBuild {
+			msg = fmt.Sprintf("dry run: would build %s in %s -> %s", res.Display, j.e.Build.WorkTree(app), app.Install.Dest)
+		}
+		return j.finish(Event{Kind: NewVersion, Version: res.Display, Message: msg})
 	}
 	j.emit(Event{Kind: NewVersion, Version: res.Display})
 	if app.Install.System() {
 		return j.park(ctx, client, res)
+	}
+	if app.Install.Type == def.InstallBuild {
+		j.emit(Event{Kind: Building, Version: res.Display, Message: "waiting to build"})
+		j.lane <- &build{job: j, res: res}
+		return deferred
 	}
 
 	stage, err := install.StageDir(app, j.tmp)
@@ -303,10 +327,15 @@ func (j *job) run(ctx context.Context) EventKind {
 			return j.fail(res.Display, err)
 		}
 	}
-	// A cancel landing now doesn't undo a completed install; record it.
+	return j.record(ctx, res)
+}
 
+// record notes a completed install and emits Installed. A cancel landing now
+// doesn't undo the install, so it's recorded regardless.
+func (j *job) record(ctx context.Context, res *source.Result) EventKind {
+	app := j.app
 	installed := time.Now()
-	err = j.e.State.Update(app.ID, func(s *state.Entry) {
+	err := j.e.State.Update(app.ID, func(s *state.Entry) {
 		s.Version, s.Display = res.Version, res.Display
 		s.InstalledAt = &installed
 		s.LastError, s.LastNotice = "", app.Notice

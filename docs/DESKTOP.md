@@ -28,7 +28,7 @@ every launcher updateapps wrote.
 | Key | From |
 |---|---|
 | `Name`, `Comment` | the definition's `name:` and `description:` |
-| `Exec` | the installed file; for `extract`, `desktop.exec` or the first of `install.executables` |
+| `Exec` | the installed file; for `extract`, `desktop.exec` or the first of `install.executables`; for `build`, `desktop.exec` or the first artifact |
 | `Path` | the program's folder (`extract` only) |
 | `Icon` | `desktop.icon`, else the AppImage's own, else a top-level `<id>`, `<program>`, `icon` or `logo` `.svg`/`.png` in the app's folder |
 | `Categories` | `desktop.categories`, else the AppImage's, else from `category:` (emulators: `Game;Emulator;`, ports and games: `Game;`, anything else: `Utility;`) |
@@ -47,7 +47,7 @@ All optional:
 
 ```yaml
 desktop:
-  exec: bin/aegisub                  # extract only: the program, relative to install.dest
+  exec: bin/aegisub                  # extract and build only: the program, relative to install.dest
   args: '%f'                         # flags or a field code, after the program
   icon: share/icons/aegisub.svg      # relative to install.dest, or an https URL
   categories: AudioVideo;Video;

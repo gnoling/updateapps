@@ -42,6 +42,9 @@ func (r *Renderer) Handle(ev engine.Event) {
 	case ev.Kind == engine.Finalizing:
 		// Shown at once: a sudo prompt may be next, and it needs context.
 		fmt.Fprintln(r.Out, r.paint(bold, ev.Message))
+	case ev.Kind == engine.Building:
+		// Builds take minutes; say what's running.
+		fmt.Fprintf(r.Out, "%s: %s\n", r.paint(bold, ev.Name), r.paint(dim, ev.Message))
 	case ev.Final:
 		r.block(ev)
 	}
