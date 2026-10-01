@@ -15,6 +15,7 @@ import (
 
 	"github.com/gnoling/updateapps/internal/config"
 	"github.com/gnoling/updateapps/internal/def"
+	"github.com/gnoling/updateapps/internal/desktop"
 	"github.com/gnoling/updateapps/internal/engine"
 	"github.com/gnoling/updateapps/internal/fetch"
 	"github.com/gnoling/updateapps/internal/install"
@@ -361,6 +362,19 @@ func show(f *flags, id string) error {
 	}
 	entry, _ := json.MarshalIndent(st.Get(app.ID), "", "  ")
 	fmt.Printf("# %s (repository: %s)\n%s\n# installs to: %s\n", app.Path, app.Repo, strings.TrimRight(string(raw), "\n"), installTarget(app))
+	if home := app.HomepageURL(); home != "" {
+		fmt.Printf("# homepage: %s\n", home)
+	}
+	if dirs, err := desktop.DefaultDirs(); err == nil && app.Program() != "" {
+		switch found := dirs.Find(app); found.Outcome {
+		case desktop.Kept:
+			fmt.Printf("# launcher: %s (yours)\n", found.Path)
+		case desktop.Written:
+			fmt.Printf("# launcher: %s (written by updateapps)\n", found.Path)
+		default:
+			fmt.Println("# launcher: none")
+		}
+	}
 	if app.Blocked != "" {
 		fmt.Printf("# NOT RUN: %s\n", app.Blocked)
 	}

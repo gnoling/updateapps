@@ -63,6 +63,7 @@ type ui struct {
 	checkAll, updateAll, updateChecked, cancelBtn *widget.Button
 
 	running  bool
+	force    bool // the next run ignores recorded versions
 	cancel   func()
 	lastRun  string
 	shown    bool
@@ -214,6 +215,18 @@ func (u *ui) mainMenu() *fyne.MainMenu {
 		fyne.NewMenuItem("Check checked", func() { u.run(engine.ModeCheck, u.model.Checked(), fromWindow) }),
 		fyne.NewMenuItem("Update checked", func() { u.run(engine.ModeUpdate, u.model.Checked(), fromWindow) }),
 		fyne.NewMenuItem("Mark checked as current", func() { u.run(engine.ModeMarkCurrent, u.model.Checked(), fromWindow) }),
+		fyne.NewMenuItem("Reinstall checked…", u.reinstallChecked),
+		fyne.NewMenuItemSeparator(),
+		fyne.NewMenuItem("Write launchers for checked", func() {
+			if apps := u.checkedOr(); len(apps) > 0 {
+				go u.writeLaunchers(apps, true)
+			}
+		}),
+		fyne.NewMenuItem("Remove launchers for checked", func() {
+			if apps := u.checkedOr(); len(apps) > 0 {
+				go u.removeLaunchers(apps)
+			}
+		}),
 		fyne.NewMenuItemSeparator(),
 		fyne.NewMenuItem("Cancel", func() {
 			if u.cancel != nil {

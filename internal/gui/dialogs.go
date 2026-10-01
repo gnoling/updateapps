@@ -178,13 +178,23 @@ func (u *ui) offerLaunchers() {
 	msg := fmt.Sprintf("Updates add a launcher from now on. Write them for the %d enabled apps too, where they're installed?\n\nApps you have a launcher for are left alone.", len(apps))
 	dialog.NewConfirm("Applications menu", msg, func(ok bool) {
 		if ok {
-			go u.writeLaunchers(apps)
+			go u.writeLaunchers(apps, false)
 		}
 	}, u.win).Show()
 }
 
-// writeLaunchers runs off the UI goroutine.
-func (u *ui) writeLaunchers(apps []*def.App) {
+// checkedOr returns the ticked apps, or says there are none.
+func (u *ui) checkedOr() []*def.App {
+	apps := u.model.Checked()
+	if len(apps) == 0 {
+		dialog.NewInformation("Nothing ticked", "Tick the apps to act on first.", u.win).Show()
+	}
+	return apps
+}
+
+// writeLaunchers runs off the UI goroutine. explain says why an app got
+// none, for when the user picked the apps.
+func (u *ui) writeLaunchers(apps []*def.App, explain bool) {
 	dirs, err := cli.LauncherDirs(fetch.New(fetch.GitHubToken(u.cfg.GitHubToken)))
 	if err != nil {
 		u.logf("launchers: %v", err)
@@ -199,11 +209,42 @@ func (u *ui) writeLaunchers(apps []*def.App) {
 		case res.Outcome == desktop.Written:
 			written++
 			u.logf("%s: %s", a.ID, res)
+			if res.Note != "" {
+				u.logf("  %s", res.Note)
+			}
 		case res.Outcome == desktop.Kept:
 			kept++
+			if explain {
+				u.logf("%s: %s", a.ID, res)
+			}
+		case explain:
+			u.logf("%s: %s", a.ID, res)
 		}
 	}
 	u.logf("wrote %d launchers to %s; %d apps have one of yours", written, dirs.Applications, kept)
+	fyne.Do(u.renderDetails)
+}
+
+// removeLaunchers deletes the launchers updateapps wrote for apps; the
+// user's own are never touched. Off the UI goroutine.
+func (u *ui) removeLaunchers(apps []*def.App) {
+	dirs, err := desktop.DefaultDirs()
+	if err != nil {
+		u.logf("launchers: %v", err)
+		return
+	}
+	n := 0
+	for _, a := range apps {
+		ok, err := dirs.Remove(a.ID)
+		switch {
+		case err != nil:
+			u.logf("%s: %v", a.ID, err)
+		case ok:
+			n++
+			u.logf("%s: removed %s", a.ID, dirs.Path(a.ID))
+		}
+	}
+	u.logf("removed %d launchers from %s", n, dirs.Applications)
 	fyne.Do(u.renderDetails)
 }
 

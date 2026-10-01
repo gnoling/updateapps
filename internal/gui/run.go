@@ -31,8 +31,26 @@ const (
 	fromTimer         // notify only about updates not announced before
 )
 
+// reinstallChecked is the CLI's --force: download and install the ticked
+// apps again, whatever version is recorded.
+func (u *ui) reinstallChecked() {
+	apps := u.checkedOr()
+	if len(apps) == 0 || u.running {
+		return
+	}
+	msg := fmt.Sprintf("Download and install %d app%s again, even where the recorded version is the latest?", len(apps), plural(len(apps)))
+	dialog.NewConfirm("Reinstall", msg, func(ok bool) {
+		if ok {
+			u.force = true
+			u.run(engine.ModeUpdate, apps, fromWindow)
+		}
+	}, u.win).Show()
+}
+
 // run starts an engine run for apps.
 func (u *ui) run(mode engine.Mode, apps []*def.App, from source) {
+	force := u.force
+	u.force = false
 	if u.running || u.cfg == nil {
 		return
 	}
@@ -55,6 +73,9 @@ func (u *ui) run(mode engine.Mode, apps []*def.App, from source) {
 	how := ""
 	if from == fromTimer {
 		how = " (scheduled)"
+	}
+	if force {
+		how = " (reinstall)"
 	}
 	u.logf("%s %s%s: %d apps", time.Now().Format("15:04"), modeNames[mode], how, len(apps))
 	cfg := u.cfg
@@ -89,7 +110,7 @@ func (u *ui) run(mode engine.Mode, apps []*def.App, from source) {
 				FlatpakUser: cfg.FlatpakScope == "user",
 			},
 		}
-		events, err := eng.Run(ctx, apps, engine.Options{Mode: mode, Jobs: cfg.Jobs, Force: cfg.Force})
+		events, err := eng.Run(ctx, apps, engine.Options{Mode: mode, Jobs: cfg.Jobs, Force: cfg.Force || force})
 		if err != nil {
 			if errors.Is(err, engine.ErrLocked) {
 				err = errors.New("another updateapps run is in progress (the command line, perhaps); try again when it's done")

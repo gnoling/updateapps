@@ -256,3 +256,96 @@ func TestEnableDisable(t *testing.T) {
 		t.Error("--defs has no config to edit")
 	}
 }
+
+func TestReposEdit(t *testing.T) {
+	for _, k := range []string{"APPDIR", "APPIMAGEDIR", "MAXJOBS", "FORCE", "VERBOSE"} {
+		t.Setenv(k, "")
+	}
+	dir := t.TempDir()
+	mine := filepath.Join(dir, "mine")
+	os.MkdirAll(mine, 0o755)
+	cfgPath := filepath.Join(dir, "config.yaml")
+	before := "jobs: 4   # laptop\n\nrepositories:\n  - name: first\n    path: " + mine + "\n"
+	os.WriteFile(cfgPath, []byte(before), 0o644)
+	run := func(args ...string) int { return Main(append([]string{"--config", cfgPath}, args...)) }
+	repos := func() map[string]config.Repository {
+		cfg, err := config.Load(cfgPath)
+		if err != nil {
+			t.Fatal(err)
+		}
+		out := map[string]config.Repository{}
+		for _, r := range cfg.Repositories {
+			out[r.Name] = r
+		}
+		return out
+	}
+	answer := func(s string) { confirmIn = strings.NewReader(s) }
+	defer func() { confirmIn = os.Stdin }()
+
+	if run("repos", "add", "second", "--path", mine) != ExitOK {
+		t.Fatal("add failed")
+	}
+	if r := repos()["second"]; r.Path != mine || r.Default != "disabled" || r.Trusted {
+		t.Errorf("added = %+v", r)
+	}
+	if data, _ := os.ReadFile(cfgPath); !strings.HasPrefix(string(data), before) {
+		t.Errorf("the rest of the file changed:\n%s", data)
+	}
+	if run("repos", "add", "second", "--path", mine) != ExitConfig {
+		t.Error("a second repository of the same name was accepted")
+	}
+	if run("repos", "add", "both", "--path", mine, "--url", "https://x.example/a.tar.gz") != ExitConfig {
+		t.Error("url and path together were accepted")
+	}
+	if _, there := repos()["both"]; there {
+		t.Error("a rejected repository was written")
+	}
+
+	// Trust is granted only on a yes.
+	answer("\n")
+	if run("repos", "trust", "second") != ExitConfig || repos()["second"].Trusted {
+		t.Error("trusted without a yes")
+	}
+	answer("y\n")
+	if run("repos", "trust", "second") != ExitOK || !repos()["second"].Trusted {
+		t.Error("not trusted after a yes")
+	}
+	if run("repos", "untrust", "second") != ExitOK || repos()["second"].Trusted {
+		t.Error("still trusted")
+	}
+	answer("no\n")
+	if run("repos", "add", "third", "--path", mine, "--trusted") != ExitConfig {
+		t.Error("added as trusted without a yes")
+	}
+	if _, there := repos()["third"]; there {
+		t.Error("a refused repository was written")
+	}
+	if run("repos", "trust", "local", "--yes") != ExitOK || !repos()["local"].Trusted {
+		t.Error("the implicit local repository can't be trusted")
+	}
+	if run("repos", "trust", "nope", "--yes") != ExitConfig {
+		t.Error("trusted a repository that doesn't exist")
+	}
+
+	// Removing deletes a fetched copy, never a folder of the user's.
+	fetched := filepath.Join(dir, "apps.d", "gone")
+	os.MkdirAll(fetched, 0o755)
+	os.WriteFile(filepath.Join(fetched, ".updateapps-fetched.json"), []byte("{}"), 0o644)
+	data, _ := os.ReadFile(cfgPath)
+	os.WriteFile(cfgPath, append(data, []byte("  - name: gone\n    url: https://x.example/a.tar.gz\n")...), 0o644)
+	if run("repos", "remove", "gone") != ExitOK || run("repos", "remove", "second") != ExitOK {
+		t.Fatal("remove failed")
+	}
+	if _, err := os.Stat(fetched); !os.IsNotExist(err) {
+		t.Error("the fetched copy is still there")
+	}
+	if _, err := os.Stat(mine); err != nil {
+		t.Error("the user's folder was deleted")
+	}
+	if got := repos(); len(got) != 2 || got["first"].Name == "" || got["local"].Name == "" {
+		t.Errorf("left: %+v", got)
+	}
+	if run("repos", "remove", "nope") != ExitConfig {
+		t.Error("removed a repository that doesn't exist")
+	}
+}

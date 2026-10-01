@@ -42,6 +42,10 @@ disabled: [mesen]
 auto_pull: false                # true: pull before every update
 ```
 
+`updateapps repos add NAME --url URL` (or `--path DIR`) and `repos remove NAME` make these
+edits for you, leaving the rest of the file as you wrote it. Removing a repository
+deletes its fetched copy; a folder of your own is left alone.
+
 ## Fetched or yours
 
 - **With `url:`**, the repository's definitions and `repo.yaml` are fetched into
@@ -83,7 +87,8 @@ you set `trusted: true`, its definitions may not:
 
 Those show as **needs trust** and are skipped; the rest of the repository works. Lua is
 always allowed: it's sandboxed. `repos pull` says when a definition newly needs trust.
-Trust is never implied, not even for `local`.
+Trust is never implied, not even for `local`. `updateapps repos trust NAME` sets it after
+asking (`--yes` answers for a script), and `repos untrust NAME` takes it away.
 
 ## Publishing one
 

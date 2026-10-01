@@ -83,10 +83,13 @@ or write outside your apps directories.
 | `check [FILTER...]` | report new versions without downloading |
 | `list [FILTER...]` | apps, installed versions, status |
 | `enable ID...`, `disable ID...` | turn apps on or off (edits the config); `--all [REPO]` for everything |
-| `show ID` | one app's definition and state |
+| `show ID` | one app's definition, homepage, launcher and state |
 | `mark-current [FILTER...]` | record already-installed apps as current, without downloading |
 | `validate` | check every definition |
 | `repos`, `repos pull` | list or refresh definition repositories |
+| `repos add NAME --url URL`, `repos remove NAME` | add one (`--path DIR` for a folder of yours) or remove it |
+| `repos trust NAME`, `repos untrust NAME` | grant or withdraw trust; granting asks first |
+| `desktop [FILTER...]` | write menu launchers for installed apps; `--remove` deletes them |
 
 A filter is a case-insensitive substring of an app's id, name or repo/URL. Flags:
 `-f` reinstall, `-v`/`-vv` detail, `--dry-run`, `-j N` parallel jobs, `--config FILE`,
@@ -103,7 +106,8 @@ to the tray when one is available.
 
 It edits the same `config.yaml`, the same way the CLI does: enabling and disabling apps,
 adding, trusting and removing repositories, and settings such as paths, jobs and the
-GitHub token. Trusting a repository asks first. "Edit definition" on a fetched definition
+GitHub token. Trusting a repository asks first. The Run menu also reinstalls the ticked apps (the command line's `-f`) and writes or
+removes their menu launchers. "Edit definition" on a fetched definition
 copies it to `apps.d/local/`, where it overrides the original, and opens it in your
 editor. `.deb` installs ask for root through polkit (`pkexec`).
 

@@ -41,6 +41,7 @@ root or write outside the apps directories.`,
 			return nil
 		},
 	})
+	cmd.AddCommand(reposEditCommands(f)...)
 	return cmd
 }
 
