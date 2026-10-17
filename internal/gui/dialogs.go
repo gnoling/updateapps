@@ -195,7 +195,7 @@ func (u *ui) checkedOr() []*def.App {
 // writeLaunchers runs off the UI goroutine. explain says why an app got
 // none, for when the user picked the apps.
 func (u *ui) writeLaunchers(apps []*def.App, explain bool) {
-	dirs, err := cli.LauncherDirs(fetch.New(fetch.GitHubToken(u.cfg.GitHubToken)))
+	dirs, err := cli.LauncherDirs(u.cfg, fetch.New(fetch.GitHubToken(u.cfg.GitHubToken)))
 	if err != nil {
 		u.logf("launchers: %v", err)
 		return

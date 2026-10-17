@@ -93,7 +93,8 @@ asking (`--yes` answers for a script), and `repos untrust NAME` takes it away.
 ## Publishing one
 
 YAML files in `apps.d/` (or at the top level), one app per file, named `<id>.yaml`. Lua
-files for `script_file:` sit beside them. Optional `repo.yaml`:
+files for `script_file:` sit beside them, and launcher icons go in `icons/<id>.png` or
+`.svg` there too ([DESKTOP.md](DESKTOP.md)). Optional `repo.yaml`:
 
 ```yaml
 name: My apps

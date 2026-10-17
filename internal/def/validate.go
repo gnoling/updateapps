@@ -172,7 +172,7 @@ func (a *App) validate() []string {
 		add("homepage must be an http(s) URL")
 	}
 	d := a.Desktop
-	if (a.Install.System() || a.Install.Type == InstallNone) && d != (Desktop{}) {
+	if (a.Install.System() || a.Install.Type == InstallNone) && !d.Empty() {
 		add("desktop does not apply to install type %s", a.Install.Type)
 	}
 	if d.Exec != "" && a.Install.Type != InstallExtract && a.Install.Type != InstallBuild {
@@ -184,9 +184,14 @@ func (a *App) validate() []string {
 	if !strings.HasPrefix(d.Icon, "https://") && !localPath(d.Icon) {
 		add("desktop.icon must be a path inside install.dest or an https URL")
 	}
-	for name, v := range map[string]string{"exec": d.Exec, "args": d.Args, "icon": d.Icon, "categories": d.Categories, "wm_class": d.WMClass} {
+	for name, v := range map[string]string{"exec": d.Exec, "args": d.Args, "icon": d.Icon, "categories": d.Categories, "wm_class": d.WMClass, "generic_name": d.GenericName} {
 		if strings.ContainsAny(v, "\n\r") {
 			add("desktop.%s must be one line", name)
+		}
+	}
+	for _, k := range d.Keywords {
+		if k == "" || strings.ContainsAny(k, ";\n\r") {
+			add("desktop.keywords: %q must be a word or phrase without ; or line breaks", k)
 		}
 	}
 	if !oneOf(a.Install.Scope, "", "user", "system") {

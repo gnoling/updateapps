@@ -86,12 +86,22 @@ type Desktop struct {
 	Exec string `yaml:"exec"`
 	// Args follow the program: flags, or a field code such as %f.
 	Args string `yaml:"args"`
-	// Icon is a file relative to install.dest, or an https URL. Default: the
-	// AppImage's own.
+	// Icon is a file relative to install.dest, or an https URL. Default:
+	// icons/<id>.png or .svg beside the definition, else the AppImage's own.
 	Icon       string `yaml:"icon"`
 	Categories string `yaml:"categories"`
 	Terminal   *bool  `yaml:"terminal"`
 	WMClass    string `yaml:"wm_class"`
+	// GenericName says what kind of thing it is ("Nintendo 64 Emulator").
+	GenericName string `yaml:"generic_name"`
+	// Keywords are extra words the menu's search matches.
+	Keywords []string `yaml:"keywords"`
+}
+
+// Empty reports a definition with no desktop: block.
+func (d Desktop) Empty() bool {
+	return !d.Off && d.Exec == "" && d.Args == "" && d.Icon == "" && d.Categories == "" &&
+		d.Terminal == nil && d.WMClass == "" && d.GenericName == "" && len(d.Keywords) == 0
 }
 
 func (d *Desktop) UnmarshalYAML(n *yaml.Node) error {
@@ -109,7 +119,7 @@ func (d *Desktop) UnmarshalYAML(n *yaml.Node) error {
 	// Node.Decode ignores KnownFields.
 	for i := 0; i < len(n.Content); i += 2 {
 		switch k := n.Content[i]; k.Value {
-		case "exec", "args", "icon", "categories", "terminal", "wm_class":
+		case "exec", "args", "icon", "categories", "terminal", "wm_class", "generic_name", "keywords":
 		default:
 			return fmt.Errorf("line %d: field %s not found in desktop", k.Line, k.Value)
 		}

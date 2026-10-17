@@ -27,6 +27,9 @@ type Dirs struct {
 	Download func(ctx context.Context, url, file string) error
 	// DryRun reports what Write and Remove would do.
 	DryRun bool
+	// Categories, keyed by a definition's category:, replaces a launcher's
+	// Categories: the user's menu wins over the definition and the AppImage.
+	Categories map[string]string
 }
 
 // DefaultDirs follows XDG_DATA_HOME.
@@ -135,6 +138,9 @@ func (d Dirs) Write(ctx context.Context, app *def.App) (Result, error) {
 	e := New(res.Path)
 	e.Set("Type", "Application")
 	e.Set("Name", oneLine(app.Name))
+	if app.Desktop.GenericName != "" {
+		e.Set("GenericName", oneLine(app.Desktop.GenericName))
+	}
 	if app.Description != "" {
 		e.Set("Comment", oneLine(app.Description))
 	}
@@ -154,7 +160,10 @@ func (d Dirs) Write(ctx context.Context, app *def.App) (Result, error) {
 		terminal = *app.Desktop.Terminal
 	}
 	e.Set("Terminal", fmt.Sprint(terminal))
-	e.Set("Categories", categories(app, meta))
+	e.Set("Categories", d.categories(app, meta))
+	if len(app.Desktop.Keywords) > 0 {
+		e.Set("Keywords", strings.Join(app.Desktop.Keywords, ";")+";")
+	}
 	if class := first(app.Desktop.WMClass, meta.Key("StartupWMClass")); class != "" {
 		e.Set("StartupWMClass", oneLine(class))
 	}
@@ -176,8 +185,8 @@ func oneLine(s string) string {
 	return strings.Join(strings.Fields(s), " ")
 }
 
-func categories(app *def.App, meta *appimage.Meta) string {
-	c := first(app.Desktop.Categories, meta.Key("Categories"))
+func (d Dirs) categories(app *def.App, meta *appimage.Meta) string {
+	c := first(d.Categories[app.Category], app.Desktop.Categories, meta.Key("Categories"))
 	if c == "" {
 		switch app.Category {
 		case "emulators":
@@ -212,6 +221,8 @@ func (d Dirs) icon(ctx context.Context, app *def.App, meta *appimage.Meta) (stri
 		data, err = readIcon(tmp)
 	case want != "":
 		data, err = readIcon(filepath.Join(app.Install.Dest, filepath.FromSlash(want)))
+	case RepoIcon(app) != "":
+		data, err = readIcon(RepoIcon(app))
 	case meta.Icon != nil:
 		data = meta.Icon
 	case app.Install.Type == def.InstallExtract:
@@ -230,6 +241,21 @@ func (d Dirs) icon(ctx context.Context, app *def.App, meta *appimage.Meta) (stri
 	d.removeIcons(app.ID)
 	file := filepath.Join(d.Icons, app.ID+ext)
 	return file, os.WriteFile(file, data, 0o644)
+}
+
+// RepoIcon is the icon a definition's repository ships for it:
+// icons/<id>.svg or .png beside the definition. "" when there's none.
+func RepoIcon(app *def.App) string {
+	if app.Path == "" {
+		return ""
+	}
+	for _, ext := range []string{".svg", ".png"} {
+		file := filepath.Join(filepath.Dir(app.Path), "icons", app.ID+ext)
+		if info, err := os.Stat(file); err == nil && info.Mode().IsRegular() {
+			return file
+		}
+	}
+	return ""
 }
 
 func readIcon(file string) ([]byte, error) {

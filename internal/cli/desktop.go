@@ -14,11 +14,12 @@ import (
 )
 
 // LauncherDirs is where launchers go, with icon URLs fetched through client.
-func LauncherDirs(client *fetch.Client) (desktop.Dirs, error) {
+func LauncherDirs(cfg *config.Config, client *fetch.Client) (desktop.Dirs, error) {
 	dirs, err := desktop.DefaultDirs()
 	if err != nil {
 		return dirs, err
 	}
+	dirs.Categories = cfg.DesktopCategories
 	dirs.Download = func(ctx context.Context, url, file string) error {
 		return client.Download(ctx, url, file, fetch.DownloadOpts{})
 	}
@@ -32,7 +33,7 @@ func Launcher(cfg *config.Config, client *fetch.Client) func(context.Context, *d
 		return nil
 	}
 	return func(ctx context.Context, app *def.App) (string, error) {
-		dirs, err := LauncherDirs(client)
+		dirs, err := LauncherDirs(cfg, client)
 		if err != nil {
 			return "", err
 		}
@@ -74,7 +75,7 @@ func desktopRun(ctx context.Context, f *flags, filters []string, remove bool) er
 		return err
 	}
 	reportDefErrors(defErrs)
-	dirs, err := LauncherDirs(fetch.New(fetch.GitHubToken(cfg.GitHubToken)))
+	dirs, err := LauncherDirs(cfg, fetch.New(fetch.GitHubToken(cfg.GitHubToken)))
 	if err != nil {
 		return err
 	}

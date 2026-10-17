@@ -28,10 +28,11 @@ every launcher updateapps wrote.
 | Key | From |
 |---|---|
 | `Name`, `Comment` | the definition's `name:` and `description:` |
+| `GenericName`, `Keywords` | `desktop.generic_name` and `desktop.keywords`, when given |
 | `Exec` | the installed file; for `extract`, `desktop.exec` or the first of `install.executables`; for `build`, `desktop.exec` or the first artifact |
 | `Path` | the program's folder (`extract` only) |
-| `Icon` | `desktop.icon`, else the AppImage's own, else a top-level `<id>`, `<program>`, `icon` or `logo` `.svg`/`.png` in the app's folder |
-| `Categories` | `desktop.categories`, else the AppImage's, else from `category:` (emulators: `Game;Emulator;`, ports and games: `Game;`, anything else: `Utility;`) |
+| `Icon` | `desktop.icon`, else the repository's `icons/<id>.svg` or `.png`, else the AppImage's own, else a top-level `<id>`, `<program>`, `icon` or `logo` `.svg`/`.png` in the app's folder |
+| `Categories` | your `desktop_categories` for the definition's `category:`, else `desktop.categories`, else the AppImage's, else from `category:` (emulators: `Game;Emulator;`, ports and games: `Game;`, anything else: `Utility;`) |
 | `Terminal`, `StartupWMClass` | `desktop.terminal` / `desktop.wm_class`, else the AppImage's |
 
 AppImages carry a launcher and icon inside them, and that's what is read. It's read
@@ -53,10 +54,27 @@ desktop:
   categories: AudioVideo;Video;
   terminal: false
   wm_class: aegisub
+  generic_name: Subtitle Editor      # what kind of thing it is
+  keywords: [subtitles, ass, srt]    # extra words the menu's search matches
 ```
+
+A repository can ship icons: `icons/<id>.png` or `.svg` in the folder its definitions
+are in. One there is used unless the definition names another.
 
 ```yaml
 desktop: false                       # a command-line tool or daemon: no launcher
 ```
 
 `exec` and a local `icon` can't point outside `install.dest`.
+
+## Your menu's categories
+
+Definitions use freedesktop's categories. If your menu is organised differently, map a
+definition's `category:` to the `Categories` you want in the config; it wins over the
+definition and the AppImage:
+
+```yaml
+desktop_categories:
+  emulators: X-XFCE;menulibre-emulation;
+  ports: X-XFCE;menulibre-emulation;
+```

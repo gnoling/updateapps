@@ -21,6 +21,8 @@ privilege: auto                    # root for .deb installs: auto | sudo | pkexe
 flatpak_scope: user                # user | system
 github_token: ""                   # else $GITHUB_TOKEN, $GH_TOKEN, then `gh auth token`
 desktop_integration: false         # add installed apps to the applications menu (docs/DESKTOP.md)
+# desktop_categories:              # your menu's Categories for a definition's category:
+#   emulators: Game;Emulator;
 check_interval: 0                  # GUI only: check this often (e.g. 6h) and notify of updates
 check_on_start: false              # GUI only: check when it starts
 source_dir: ~/apps/.src            # work trees of apps built from source (install: build)

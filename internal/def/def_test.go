@@ -226,7 +226,7 @@ func TestHomepage(t *testing.T) {
 func TestDesktop(t *testing.T) {
 	dir := t.TempDir()
 	src := "source: {type: github-release, repo: o/r}\n"
-	a, err := LoadFile(write(t, dir, "a.yaml", src+"asset: '*.zip'\ninstall: {type: extract, dest: '${APPDIR}/a', executables: [bin/a]}\ndesktop: {args: '%f', icon: share/a.png, terminal: true}\n"), vars)
+	a, err := LoadFile(write(t, dir, "a.yaml", src+"asset: '*.zip'\ninstall: {type: extract, dest: '${APPDIR}/a', executables: [bin/a]}\ndesktop: {args: '%f', icon: share/a.png, terminal: true, generic_name: A Thing, keywords: [a, thing]}\n"), vars)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -243,6 +243,7 @@ func TestDesktop(t *testing.T) {
 		"file":     src + "desktop: {exec: x}\n",
 		"icon":     src + "desktop: {icon: 'http://x.example/i.png'}\n",
 		"typo":     src + "desktop: {icons: x}\n",
+		"keyword":  src + "desktop: {keywords: ['a;b']}\n",
 		"true":     src + "desktop: true\n",
 		"deb":      src + "asset: '*.deb'\ninstall: {type: deb}\ndesktop: {args: x}\n",
 	} {

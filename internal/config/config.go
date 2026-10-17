@@ -77,6 +77,9 @@ type Config struct {
 	// DesktopIntegration gives installed apps a launcher in the applications
 	// menu, except where the user has made their own.
 	DesktopIntegration bool `yaml:"desktop_integration"`
+	// DesktopCategories replaces a launcher's Categories by the definition's
+	// category: for menus organised some other way than freedesktop's.
+	DesktopCategories map[string]string `yaml:"desktop_categories"`
 	// CheckInterval makes the GUI check for updates this often and notify:
 	// a duration like 6h, or empty/0/off for never. The CLI ignores it.
 	CheckInterval string        `yaml:"check_interval"`

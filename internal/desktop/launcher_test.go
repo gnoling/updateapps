@@ -214,3 +214,43 @@ func TestIconFromDefinition(t *testing.T) {
 		t.Errorf("launcher names an icon that wasn't written:\n%s", got)
 	}
 }
+
+func TestGenericNameKeywordsAndUserCategories(t *testing.T) {
+	d, app := dirs(t), extracted(t)
+	app.Desktop.GenericName = "Game Boy Emulator"
+	app.Desktop.Keywords = []string{"gb", "game boy"}
+	app.Desktop.Categories = "Game"
+	d.Categories = map[string]string{"emulators": "X-XFCE;menulibre-emulation;", "tools": "Utility"}
+	res, err := d.Write(context.Background(), app)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := read(t, res.Path)
+	for _, line := range []string{"GenericName=Game Boy Emulator\n", "Keywords=gb;game boy;\n", "Categories=X-XFCE;menulibre-emulation;\n"} {
+		if !strings.Contains(got, line) {
+			t.Errorf("missing %q in:\n%s", line, got)
+		}
+	}
+}
+
+// The repository's icon beats the app's own, and desktop.icon beats both.
+func TestIconFromRepository(t *testing.T) {
+	d, app := dirs(t), extracted(t)
+	repo := t.TempDir()
+	app.Path = filepath.Join(repo, "gearboy.yaml")
+	put(t, filepath.Join(repo, "icons", "gearboy.png"), "\x89PNG\r\n\x1a\nrepo", 0o644)
+	if _, err := d.Write(context.Background(), app); err != nil {
+		t.Fatal(err)
+	}
+	if got := read(t, filepath.Join(d.Icons, "gearboy.png")); !strings.Contains(got, "repo") {
+		t.Errorf("icon = %q", got)
+	}
+	put(t, filepath.Join(app.Install.Dest, "own.svg"), svg+"<!-- own -->", 0o644)
+	app.Desktop.Icon = "own.svg"
+	if _, err := d.Write(context.Background(), app); err != nil {
+		t.Fatal(err)
+	}
+	if got := read(t, filepath.Join(d.Icons, "gearboy.svg")); !strings.Contains(got, "own") {
+		t.Errorf("icon = %q", got)
+	}
+}
